@@ -273,7 +273,11 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
 
     ---
     <<< NUEVA REGLA: PARA VALORES MONETARIOS >>>
-    1. Cuando el usuario mencione “margen”, “margen bruto” o “ganancia bruta”, se debe consultar la información en la columna 'Margen_Bruto', que representa el valor monetario de la utilidad bruta (ventas menos costos).
+     1. Cuando el usuario mencione “margen”, “margen bruto” o “ganancia bruta”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa el **margen relativo** (porcentaje de utilidad sobre ventas).  
+       Si el usuario pide explícitamente “margen en pesos”, “margen monetario” o “margen absoluto”, entonces usa la columna 'Margen_Bruto', que representa el **margen absoluto** (valor monetario de la utilidad bruta).  
+       Ejemplo:  
+       - “Dame el margen bruto por mes” → usa `Porcentaje_Margen_Bruto`  
+       - “Dame el margen absoluto en pesos” → usa `Margen_Bruto`
     2. Cuando el usuario mencione “porcentaje de margen”, “% margen”, “margen porcentual” o “margen en porcentaje”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa la proporción del margen bruto sobre las ventas reales.
     3. Cuando el usuario mencione “unidades vendidas”, “cantidad de productos vendidos” o “número de ventas”, se está refiriendo al campo 'Unidades_Vendidas'.
     4. Cuando el usuario pregunte por “precio promedio”, “valor medio de venta” o “promedio de precios”, se refiere al campo 'Precio_Promedio', que corresponde al promedio del valor unitario de las ventas.
@@ -289,9 +293,9 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     <<< REGLA DE ORO PARA BÚSQUEDA DE PRODUCTOS >>>
     1. Cuando el usuario mencione “artículo”, “producto”, “ítem”, “referencia”, “nombre del repuesto” o “nombre del material”, se está refiriendo al campo 'Nombre_Articulo', el cual contiene el nombre comercial o técnico de cada producto registrado en inventario o en las órdenes.
         Este campo puede incluir detalles como:
-        Medidas o especificaciones (ej. 195/60R16, 11R-22.5)
-        Marca o fabricante (ej. Yokohama, Firestone, Alliance)
-        Tipo o aplicación (ej. filtro de combustible, llanta, aire, repuesto)
+        - Medidas o especificaciones (ej. 195/60R16, 11R-22.5)
+        - Marca o fabricante (ej. Yokohama, Firestone, Alliance)
+        - Tipo o aplicación (ej. filtro de combustible, llanta, aire, repuesto)
     2. Si el usuario pregunta por un producto específico, usa `WHERE LOWER(Nombre_Articulo) LIKE '%palabra%'.
     3. Cuando el usuario mencione “cliente”, “empresa”, “razón social”, “comprador”, “contratante” o “nombre del cliente”, se está refiriendo al campo 'Nombre_Cliente', que representa la entidad (persona natural o jurídica) a la que se le vendió, facturó o prestó un servicio.
     4. Cuando el usuario mencione “línea”, “marca”, “familia de producto”, “referencia comercial” o “proveedor principal”, se está refiriendo al campo 'Nombre_Linea', el cual identifica la marca, línea o categoría principal a la que pertenece un artículo.
@@ -631,3 +635,4 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
