@@ -278,13 +278,13 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     3. Ejemplo: Si la pregunta es "¿cuál es el total facturado?", la consulta debería ser algo como `SELECT SUM(Total_Facturado_COP), SUM(Total_Facturado_USD) FROM automundial;`. Aplica este patrón a otras métricas.
     ---
     <<< REGLA CRÍTICA PARA FILTRAR POR FECHA >>>
-    1. Tu tabla tiene una columna de fecha llamada `Fecha_Facturacion`.
-    2. Si el usuario especifica un año (ej: "del 2025", "en 2024"), SIEMPRE debes añadir una condición `WHERE YEAR(Fecha_Facturacion) = [año]` a la consulta.
-    3. Ejemplo: "dame las ventas de 2025" -> DEBE INCLUIR `WHERE YEAR(Fecha_Facturacion) = 2025`.
+    1. Tu tabla tiene una columna de fecha llamada `Fecha`.
+    2. Si el usuario especifica un año (ej: "del 2025", "en 2024"), SIEMPRE debes añadir una condición `WHERE YEAR(Fecha) = [año]` a la consulta.
+    3. Ejemplo: "dame las ventas de 2025" -> DEBE INCLUIR `WHERE YEAR(Fecha) = 2025`.
     ---
     <<< REGLA DE ORO PARA BÚSQUEDA DE PRODUCTOS >>>
-    1. La columna `Nombre_Producto` contiene descripciones largas.
-    2. Si el usuario pregunta por un producto o servicio específico, usa `WHERE LOWER(Nombre_Producto) LIKE '%palabra%'.
+    1. La columna `Nombre_Articulo` contiene descripciones largas.
+    2. Si el usuario pregunta por un producto específico, usa `WHERE LOWER(Nombre_Articulo) LIKE '%palabra%'.
     ---
     {hist_text}
     Pregunta del usuario: "{pregunta_usuario}"
@@ -344,7 +344,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
 
 def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
     st.info("🤔 Activando el agente SQL experto como plan B.")
-    prompt_sql = (f"Tu tarea es responder la pregunta consultando la tabla 'automundial'.\n{hist_text}\nDevuelve ÚNICAMENTE una tabla en formato Markdown (con encabezados). NUNCA resumas ni expliques. El SQL interno NO DEBE CONTENER 'LIMIT'.\nPregunta: {pregunta_usuario}")
+    prompt_sql = (f"Tu tarea es responder la pregunta consultando la tabla 'automundial'.\n{hist_text}\nDevuelve ÚNICAMENTE una tabla en formato Markdown (con encabezados). NUNCA resumas ni expliques. El SQL interno NO DEBE CONTENER 'LIMIT' excepción si el cliente lo solicita.\nPregunta: {pregunta_usuario}")
     try:
         with st.spinner("💬 Pidiendo al agente SQL que responda..."):
             res = agente_sql.invoke(prompt_sql)
@@ -386,7 +386,7 @@ def generar_resumen_tabla(pregunta_usuario: str, res: dict) -> dict:
     Basa tu respuesta en la pregunta del usuario para que se sienta como una continuación natural de la conversación.
     Si la respuesta no le gustó al USUARIO, disculpate es posible que le entendiste mal.
     
-    IMPORTANTE: Varía tus respuestas. No uses siempre la misma frase. Suena natural y humana.
+    IMPORTANTE: Varía tus respuestas. No uses siempre la misma frase "Por supuesto". Suena natural y humana.
 
     Pregunta del usuario: "{pregunta_usuario}"
     
@@ -599,6 +599,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
