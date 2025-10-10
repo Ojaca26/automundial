@@ -456,29 +456,51 @@ def validar_y_corregir_respuesta_analista(pregunta_usuario: str, res_analisis: d
         except Exception as e: return {"tipo": "error", "texto": f"Excepción durante la validación: {e}"}
     return {"tipo": "error", "texto": "Se alcanzó el límite de intentos de validación."}
 
+
+
 def clasificar_intencion(pregunta: str) -> str:
-    # <<< MODIFICADO para incluir 'correo' con ejemplos más claros >>>
+    # <<< MODIFICADO para mejorar la detección de consultas de datos >>>
     prompt_orq = f"""
 Clasifica la intención del usuario en UNA SOLA PALABRA. Presta especial atención a los verbos de acción y palabras clave.
+
 1. `analista`: Si la pregunta pide explícitamente una interpretación, resumen, comparación o explicación.
-   PALABRAS CLAVE PRIORITARIAS: analiza, compara, resume, explica, por qué, tendencia, insights, dame un análisis, haz un resumen.
+   PALABRAS CLAVE PRIORITARIAS: analiza, compara, resume, explica, por qué, tendencia, insights, dame un análisis, haz un resumen, interpreta.
    Si una de estas palabras clave está presente, la intención SIEMPRE es `analista`.
-2. `consulta`: Si la pregunta pide datos crudos (listas, conteos, totales) y NO contiene una palabra clave prioritaria de `analista`.
-   Ejemplos: 'cuántos proveedores hay', 'lista todos los productos', 'muéstrame el total', 'y ahora por mes'.
+
+2. `consulta`: Si la pregunta pide datos crudos (listas, conteos, totales, valores, métricas) o resultados numéricos directos, y NO contiene palabras clave de `analista`.
+   Ejemplos: 'cuántos proveedores hay', 'lista todos los productos', 'muéstrame el total', 'ventas por mes', 'margen por cliente', 'costo total', 'precio promedio'.
+   PALABRAS CLAVE ADICIONALES: venta, ventas, costo, costos, margen, precio, unidades, rubro, cliente, artículo, producto, línea, familia, total, facturado, utilidad.
+
 3. `correo`: Si la pregunta pide explícitamente enviar un correo, email o reporte.
    PALABRAS CLAVE: envía, mandar, correo, email, reporte a, envíale a.
+
 4. `conversacional`: Si es un saludo o una pregunta general no relacionada con datos.
-   Ejemplos: 'hola', 'gracias', 'qué puedes hacer'.
+   Ejemplos: 'hola', 'gracias', 'qué puedes hacer', 'cómo estás'.
 
 Pregunta: "{pregunta}"
 Clasificación:
 """
+
     try:
         opciones = {"consulta", "analista", "conversacional", "correo"}
         r = llm_orq.invoke(prompt_orq).content.strip().lower().replace('"', '').replace("'", "")
-        return r if r in opciones else "conversacional"
+
+        # 🔹 Refuerzo semántico (fallback inteligente)
+        # Si contiene palabras típicas de consultas de datos, fuerza 'consulta'
+        if any(pal in pregunta.lower() for pal in [
+            "venta", "ventas", "margen", "costo", "costos", "precio", "unidades",
+            "rubro", "cliente", "artículo", "producto", "línea", "familia", "total", "facturado"
+        ]):
+            return "consulta"
+
+        # Si el modelo devuelve algo fuera de las opciones válidas → se asume consulta
+        if r not in opciones:
+            return "consulta"
+
+        return r
+
     except Exception:
-        return "conversacional"
+        return "consulta"
 
 def obtener_datos_sql(pregunta_usuario: str, hist_text: str) -> dict:
     if any(keyword in pregunta_usuario.lower() for keyword in ["anterior", "esos datos", "esa tabla"]):
@@ -609,18 +631,3 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
