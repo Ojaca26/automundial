@@ -278,6 +278,19 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
        Ejemplo:  
        - “Dame el margen bruto por mes” → usa `Porcentaje_Margen_Bruto`  
        - “Dame el margen absoluto en pesos” → usa `Margen_Bruto`
+        
+        ❗Nunca promedies el margen ni uses AVG(Porcentaje_Margen_Bruto).  
+        El margen relativo SIEMPRE debe calcularse dinámicamente como:
+            (1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100
+        o equivalente:
+            (SUM(Ventas_Reales - Costo_Reales) / SUM(Ventas_Reales)) * 100
+        según el nivel de agrupación.
+        Ejemplo:
+        SELECT MONTH(Fecha) AS Mes, 
+               (1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100 AS Margen_Porcentual
+        FROM automundial
+        GROUP BY MONTH(Fecha);
+        
     2. Cuando el usuario mencione “porcentaje de margen”, “% margen”, “margen porcentual” o “margen en porcentaje”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa la proporción del margen bruto sobre las ventas reales.
     3. Cuando el usuario mencione “unidades vendidas”, “cantidad de productos vendidos” o “número de ventas”, se está refiriendo al campo 'Unidades_Vendidas'.
     4. Cuando el usuario pregunte por “precio promedio”, “valor medio de venta” o “promedio de precios”, se refiere al campo 'Precio_Promedio', que corresponde al promedio del valor unitario de las ventas.
@@ -635,4 +648,5 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
