@@ -272,10 +272,14 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `automundial` para responder la pregunta del usuario.
 
     ---
-    <<< NUEVA REGLA: SIEMPRE MOSTRAR COP Y USD >>>
-    1. Muchas columnas financieras tienen una versión para COP y otra para USD, a menudo terminando en `_COP` y `_USD` (ej: `Total_COP`, `Total_USD`, `Valor_Consumido_COP`, `Valor_Consumido_USD`).
-    2. Si la pregunta del usuario es sobre un valor monetario (costo, valor, total, facturación, precio, consumido), DEBES seleccionar AMBAS columnas en la consulta, la de COP y la de USD, si existen.
-    3. Ejemplo: Si la pregunta es "¿cuál es el total facturado?", la consulta debería ser algo como `SELECT SUM(Total_Facturado_COP), SUM(Total_Facturado_USD) FROM automundial;`. Aplica este patrón a otras métricas.
+    <<< NUEVA REGLA: PARA VALORES MONETARIOS >>>
+    1. Cuando el usuario mencione “margen”, “margen bruto” o “ganancia bruta”, se debe consultar la información en la columna 'Margen_Bruto', que representa el valor monetario de la utilidad bruta (ventas menos costos).
+    2. Cuando el usuario mencione “porcentaje de margen”, “% margen”, “margen porcentual” o “margen en porcentaje”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa la proporción del margen bruto sobre las ventas reales.
+    3. Cuando el usuario mencione “unidades vendidas”, “cantidad de productos vendidos” o “número de ventas”, se está refiriendo al campo 'Unidades_Vendidas'.
+    4. Cuando el usuario pregunte por “precio promedio”, “valor medio de venta” o “promedio de precios”, se refiere al campo 'Precio_Promedio', que corresponde al promedio del valor unitario de las ventas.
+    5. Cuando el usuario mencione “ventas reales”, “ventas totales” o “valor vendido”, se está refiriendo al campo 'Ventas_Reales', que representa el total monetario facturado o reconocido como ingreso real.
+    6. Cuando el usuario mencione “costos reales”, “costos totales” o “valor del costo”, se refiere al campo Costo_Reales, que muestra el total de costos asociados a las ventas (sin incluir margen ni impuestos).
+    7. Ejemplo: Si la pregunta es "¿cuál es el total facturado?", la consulta debería ser algo como `SELECT SUM(Ventas_Reales) FROM automundial;`. Aplica este patrón a otras métricas.
     ---
     <<< REGLA CRÍTICA PARA FILTRAR POR FECHA >>>
     1. Tu tabla tiene una columna de fecha llamada `Fecha`.
@@ -283,8 +287,14 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     3. Ejemplo: "dame las ventas de 2025" -> DEBE INCLUIR `WHERE YEAR(Fecha) = 2025`.
     ---
     <<< REGLA DE ORO PARA BÚSQUEDA DE PRODUCTOS >>>
-    1. La columna `Nombre_Articulo` contiene descripciones largas.
+    1. Cuando el usuario mencione “artículo”, “producto”, “ítem”, “referencia”, “nombre del repuesto” o “nombre del material”, se está refiriendo al campo 'Nombre_Articulo', el cual contiene el nombre comercial o técnico de cada producto registrado en inventario o en las órdenes.
+        Este campo puede incluir detalles como:
+        Medidas o especificaciones (ej. 195/60R16, 11R-22.5)
+        Marca o fabricante (ej. Yokohama, Firestone, Alliance)
+        Tipo o aplicación (ej. filtro de combustible, llanta, aire, repuesto)
     2. Si el usuario pregunta por un producto específico, usa `WHERE LOWER(Nombre_Articulo) LIKE '%palabra%'.
+    3. Cuando el usuario mencione “cliente”, “empresa”, “razón social”, “comprador”, “contratante” o “nombre del cliente”, se está refiriendo al campo 'Nombre_Cliente', que representa la entidad (persona natural o jurídica) a la que se le vendió, facturó o prestó un servicio.
+    4. Cuando el usuario mencione “línea”, “marca”, “familia de producto”, “referencia comercial” o “proveedor principal”, se está refiriendo al campo 'Nombre_Linea', el cual identifica la marca, línea o categoría principal a la que pertenece un artículo.
     ---
     {hist_text}
     Pregunta del usuario: "{pregunta_usuario}"
@@ -599,6 +609,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
