@@ -46,15 +46,29 @@ with col2:
 # ============================================
 # 1) Conexión a la Base de Datos y LLMs
 # ============================================
-
 @st.cache_resource
 def get_database_connection():
-    with st.spinner("🛰️ Conectando a la base de datos de automundial..."):
+    """
+    Esta función se conecta a la base de datos usando los secretos de Streamlit.
+    """
+    with st.spinner("🛰️ Conectando a la base de datos..."):
         try:
             creds = st.secrets["db_credentials"]
+            
+            # 1. URI LIMPIA: Quitamos el parámetro ?ssl_mode de aquí.
             uri = f"mysql+pymysql://{creds['user']}:{creds['password']}@{creds['host']}/{creds['database']}"
-            engine_args = {"pool_recycle": 3600, "pool_pre_ping": True}
+            
+            # 2. ENGINE_ARGS: Pasamos la configuración de SSL aquí.
+            # Esto le dice al motor de SQLAlchemy que deshabilite SSL para la conexión.
+            engine_args = {
+                "connect_args": {"ssl_disabled": True}
+            }
+
             db = SQLDatabase.from_uri(uri, include_tables=["automundial"], engine_args=engine_args)
+            
+            # Prueba la conexión
+            db.run("SELECT 1")
+
             st.success("✅ Conexión a la base de datos establecida.")
             return db
         except Exception as e:
@@ -648,5 +662,6 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
