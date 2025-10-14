@@ -360,6 +360,18 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
             with db._engine.connect() as conn: df = pd.read_sql(text(sql_query_limpia), conn)
         st.success(f"✅ ¡Consulta ejecutada! Filas: {len(df)}")
 
+        top_n_match = re.search(r'top\s*(\d+)', pregunta_usuario.lower())
+        if top_n_match and "limit" not in sql_query_limpia.lower():
+            try:
+                top_n = int(top_n_match.group(1))
+                # Si el DataFrame tiene más filas que el top N solicitado...
+                if len(df) > top_n:
+                    st.info(f"💡 La IA olvidó el LIMIT. Aplicando Top {top_n} con Python.")
+                    # ...nos quedamos solo con las primeras N filas.
+                    df = df.head(top_n)
+            except Exception:
+                pass # Si algo falla, continuamos con el df completo
+
         try:
             if not df.empty:
                 # Extraer año de la consulta SQL (si existe)
@@ -731,6 +743,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
