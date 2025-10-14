@@ -279,6 +279,33 @@ def _asegurar_select_only(sql: str) -> str:
     sql_clean = re.sub(r'(?is)\blimit\s+\d+\s*$', '', sql_clean).strip()
     return sql_clean
 
+def style_dataframe(df: pd.DataFrame):
+    """Aplica el formato de miles y resalta la fila Total a un DataFrame."""
+    
+    # Detecta las columnas numéricas que no son ni año ni mes
+    value_cols = [
+        c for c in df.select_dtypes("number").columns
+        if not re.search(r"(?i)\b(mes|año|dia|fecha)\b", c)
+    ]
+    
+    # Define el diccionario de formato genérico de miles
+    format_dict = {col: "{:,.0f}" for col in value_cols}
+
+    # Define la función para resaltar la fila "Total"
+    def highlight_total(row):
+        # Revisa si la primera celda de la fila es "Total"
+        if str(row.iloc[0]).lower() == "total":
+            return ["font-weight: bold; background-color: #f8f9fa; border-top: 2px solid #999;"] * len(row)
+        else:
+            return [""] * len(row)
+
+    # Aplica el resaltado y el formato
+    try:
+        return df.style.apply(highlight_total, axis=1).format(format_dict)
+    except Exception:
+        # Si algo falla, devuelve el df sin formato para evitar un crash
+        return df
+
 def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     st.info("🤖 El agente de datos está traduciendo tu pregunta a SQL...")
     
@@ -382,39 +409,21 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
                 if year_value and "Año" not in df.columns:
                     df.insert(0, "Año", year_value)
 
-                # 🔹 Detectar solo columnas numéricas que sí deben sumarse (evitar Mes, Año, Fecha...)
-                value_cols = [
-                    c for c in df.select_dtypes("number").columns
-                    if not re.search(r"(?i)\b(mes|año|dia|fecha)\b", c)
-                ]
+                # Detectar columnas numéricas para el total
+                value_cols = [c for c in df.select_dtypes("number").columns if not re.search(r"(?i)\b(mes|año|dia|fecha)\b", c)]
 
-                # 🔹 Agregar fila Total si hay columnas de valor
-                if value_cols:
+                # Agregar fila Total (si aplica, y si hay más de una fila)
+                if value_cols and len(df) > 1:
                     total_row = {col: df[col].sum() if col in value_cols else "" for col in df.columns}
-                    total_row[df.columns[0]] = "Total"  # siempre en la primera columna
+                    total_row[df.columns[0]] = "Total"
                     df.loc[len(df)] = total_row
 
-                # 🎨 Estilo visual para la fila Total
-                def highlight_total(row):
-                    return [
-                        "font-weight: bold; background-color: #f8f9fa; border-top: 2px solid #999;"
-                        if str(row.iloc[0]).lower() == "total" else ""
-                    ] * len(row)
-
-                # --- INICIO DE LAS LÍNEAS NUEVAS ---
-                # 1. Crea el diccionario para formatear TODAS las columnas numéricas
-                format_dict = {col: "{:,.0f}" for col in value_cols}
-
-                # 2. Aplica AMBOS estilos: el resaltado y el formato de número
-                styled_df = df.style.apply(highlight_total, axis=1).format(format_dict)
-                # --- FIN DE LAS LÍNEAS NUEVAS ---
-
-                return {"sql": sql_query_limpia, "df": df, "styled": styled_df}
-
         except Exception as e:
-            st.warning(f"No se pudo aplicar formato ni totales: {e}")
-            
+            st.warning(f"No se pudo agregar la fila de totales: {e}")
+
+        # IMPORTANTE: Ahora solo devolvemos el df crudo, sin el objeto "styled"
         return {"sql": sql_query_limpia, "df": df}
+
     except Exception as e:
         st.warning(f"❌ Error en la consulta directa. Intentando método alternativo... Detalle: {e}")
         return {"sql": None, "df": None, "error": str(e)}
@@ -689,7 +698,9 @@ for message in st.session_state.messages:
             if content.get("texto"): st.markdown(content["texto"])
             
             if content.get("styled") is not None: st.dataframe(content["styled"])
-            elif isinstance(content.get("df"), pd.DataFrame) and not content["df"].empty: st.dataframe(content["df"])
+            elif isinstance(content.get("df"), pd.DataFrame) and not content["df"].empty:
+                styled_df = style_dataframe(content["df"])
+                st.dataframe(styled_df)
             
             if content.get("analisis"): st.markdown(content["analisis"])
             
@@ -714,7 +725,9 @@ def procesar_pregunta(prompt):
                 if res.get("texto"): st.markdown(res["texto"])
                 
                 if res.get("styled") is not None: st.dataframe(res["styled"])
-                elif isinstance(res.get("df"), pd.DataFrame) and not res["df"].empty: st.dataframe(res["df"])
+                elif isinstance(res.get("df"), pd.DataFrame) and not res["df"].empty:
+                    styled_df = style_dataframe(res["df"])
+                    st.dataframe(styled_df)
                 
                 if res.get("analisis"):
                     st.markdown("---"); st.markdown("### 🧠 Análisis de IANA"); st.markdown(res["analisis"])
@@ -743,6 +756,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
