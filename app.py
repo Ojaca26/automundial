@@ -620,8 +620,12 @@ for message in st.session_state.messages:
         content = message.get("content", {});
         if isinstance(content, dict):
             if content.get("texto"): st.markdown(content["texto"])
-            if isinstance(content.get("df"), pd.DataFrame) and not content["df"].empty: st.dataframe(content["df"])
+            
+            if content.get("styled") is not None: st.dataframe(content["styled"])
+            elif isinstance(content.get("df"), pd.DataFrame) and not content["df"].empty: st.dataframe(content["df"])
+            
             if content.get("analisis"): st.markdown(content["analisis"])
+            
         elif isinstance(content, str): st.markdown(content)
 
 st.markdown("### 🎤 Habla con IANA o escribe tu pregunta")
@@ -669,6 +673,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
