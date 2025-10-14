@@ -34,14 +34,14 @@ import json
 # ============================================
 # 0) Configuración de la Página y Título
 # ============================================
-st.set_page_config(page_title="IANA para Automundial", page_icon="logo_automundial.png", layout="wide")
+st.set_page_config(page_title="IANA para AutoLLantas", page_icon="logo_autollantas.png", layout="wide")
 
 col1, col2 = st.columns([1, 4])
 with col1:
-    st.image("logo_automundial.png", width=120)
+    st.image("logo_autollantas.png", width=120)
 with col2:
     st.title("IANA: Tu Asistente IA para Análisis de Datos")
-    st.markdown("Soy la red de agentes IA de **Automundial**. Hazme una pregunta sobre los datos de tu negocio.")
+    st.markdown("Soy la red de agentes IA de **AutoLLantas**. Hazme una pregunta sobre los datos de tu negocio.")
 
 # ============================================
 # 1) Conexión a la Base de Datos y LLMs
@@ -64,7 +64,7 @@ def get_database_connection():
                 "connect_args": {"ssl_disabled": True}
             }
 
-            db = SQLDatabase.from_uri(uri, include_tables=["automundial"], engine_args=engine_args)
+            db = SQLDatabase.from_uri(uri, include_tables=["autollantas"], engine_args=engine_args)
             
             # Prueba la conexión
             db.run("SELECT 1")
@@ -283,7 +283,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     st.info("🤖 El agente de datos está traduciendo tu pregunta a SQL...")
     
     prompt_con_instrucciones = f"""
-    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `automundial` para responder la pregunta del usuario.
+    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario.
 
     ---
     <<< NUEVA REGLA: PARA VALORES MONETARIOS >>>
@@ -302,7 +302,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
         Ejemplo:
         SELECT MONTH(Fecha) AS Mes, 
                (1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100 AS Margen_Porcentual
-        FROM automundial
+        FROM autollantas
         GROUP BY MONTH(Fecha);
         
     2. Cuando el usuario mencione “porcentaje de margen”, “% margen”, “margen porcentual” o “margen en porcentaje”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa la proporción del margen bruto sobre las ventas reales.
@@ -310,7 +310,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     4. Cuando el usuario pregunte por “precio promedio”, “valor medio de venta” o “promedio de precios”, se refiere al campo 'Precio_Promedio', que corresponde al promedio del valor unitario de las ventas.
     5. Cuando el usuario mencione “ventas reales”, “ventas totales” o “valor vendido”, se está refiriendo al campo 'Ventas_Reales', que representa el total monetario facturado o reconocido como ingreso real.
     6. Cuando el usuario mencione “costos reales”, “costos totales” o “valor del costo”, se refiere al campo Costo_Reales, que muestra el total de costos asociados a las ventas (sin incluir margen ni impuestos).
-    7. Ejemplo: Si la pregunta es "¿cuál es el total facturado?", la consulta debería ser algo como `SELECT SUM(Ventas_Reales) FROM automundial;`. Aplica este patrón a otras métricas.
+    7. Ejemplo: Si la pregunta es "¿cuál es el total facturado?", la consulta debería ser algo como `SELECT SUM(Ventas_Reales) FROM autollantas;`. Aplica este patrón a otras métricas.
     ---
     <<< REGLA CRÍTICA PARA FILTRAR POR FECHA >>>
     1. Tu tabla tiene una columna de fecha llamada `Fecha`.
@@ -385,7 +385,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
 
 def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
     st.info("🤔 Activando el agente SQL experto como plan B.")
-    prompt_sql = (f"Tu tarea es responder la pregunta consultando la tabla 'automundial'.\n{hist_text}\nDevuelve ÚNICAMENTE una tabla en formato Markdown (con encabezados). NUNCA resumas ni expliques. El SQL interno NO DEBE CONTENER 'LIMIT' excepción si el cliente lo solicita.\nPregunta: {pregunta_usuario}")
+    prompt_sql = (f"Tu tarea es responder la pregunta consultando la tabla 'autollantas'.\n{hist_text}\nDevuelve ÚNICAMENTE una tabla en formato Markdown (con encabezados). NUNCA resumas ni expliques. El SQL interno NO DEBE CONTENER 'LIMIT' excepción si el cliente lo solicita.\nPregunta: {pregunta_usuario}")
     try:
         with st.spinner("💬 Pidiendo al agente SQL que responda..."):
             res = agente_sql.invoke(prompt_sql)
@@ -410,7 +410,7 @@ def analizar_con_datos(pregunta_usuario: str, hist_text: str, df: pd.DataFrame |
     return analisis
 def responder_conversacion(pregunta_usuario: str, hist_text: str):
     st.info("💬 Activando modo de conversación...")
-    prompt_personalidad = f"""Tu nombre es IANA, una IA amable de automundial. Ayuda a analizar datos.\nSi el usuario hace un comentario casual, responde amablemente de forma natural, muy humana y redirígelo a tus capacidades.\n{hist_text}\nPregunta: "{pregunta_usuario}" """
+    prompt_personalidad = f"""Tu nombre es IANA, una IA amable de autollantas. Ayuda a analizar datos.\nSi el usuario hace un comentario casual, responde amablemente de forma natural, muy humana y redirígelo a tus capacidades.\n{hist_text}\nPregunta: "{pregunta_usuario}" """
     respuesta = llm_analista.invoke(prompt_personalidad).content
     return {"texto": respuesta, "df": None, "analisis": None}
 
@@ -606,7 +606,7 @@ def orquestador(pregunta_usuario: str, chat_history: list):
 # ============================================
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": {"texto": "¡Hola! Soy IANA, tu asistente de IA de automundial. ¿Qué te gustaría saber?"}}]
+    st.session_state.messages = [{"role": "assistant", "content": {"texto": "¡Hola! Soy IANA, tu asistente de IA de autollantas. ¿Qué te gustaría saber?"}}]
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -662,6 +662,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
