@@ -289,32 +289,15 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     <<< NUEVA REGLA CRÍTICA: PARA CONSULTAS "TOP N" POR GRUPO >>>
     1. Si el usuario pide un "top 5", "top 10", "los 5 mejores", etc., DE CADA mes, o cualquier otra categoría (un top N POR GRUPO), DEBES usar una función de ventana como ROW_NUMBER(). NO USES LIMIT.
     2. La estructura correcta usa un Subquery o un CTE (Common Table Expression) para primero calcular el ranking y luego filtrar.
-
-    Ejemplo de estructura para "top 5 clientes por mes":
-    WITH RankedSales AS (
-      SELECT
-        MONTH(Fecha) AS Mes,
-        Nombre_Cliente,
-        SUM(Ventas_Reales) AS Total_Facturacion,
-        ROW_NUMBER() OVER(PARTITION BY MONTH(Fecha) ORDER BY SUM(Ventas_Reales) DESC) as rn
-      FROM
-        autollantas
-      WHERE
-        YEAR(Fecha) = 2025
-      GROUP BY
-        Mes,
-        Nombre_Cliente
-    )
-    SELECT
-      Mes,
-      Nombre_Cliente,
-      Total_Facturacion
-    FROM
-      RankedSales
-    WHERE
-      rn <= 5
-    ORDER BY
-      Mes, Total_Facturacion DESC;
+    - **EJEMPLO**:
+          - Pregunta: "dame el top 5 de los mejores clientes 2025"
+          - SQL Correcto:
+            SELECT Nombre_Cliente, SUM(Ventas_Reales) AS Total_Facturacion
+            FROM autollantas
+            WHERE YEAR(Fecha) = 2025
+            GROUP BY Nombre_Cliente
+            ORDER BY Total_Facturacion DESC
+            LIMIT 5;
     
     <<< NUEVA REGLA: PARA VALORES MONETARIOS >>>
      1. Cuando el usuario mencione “margen”, “margen bruto” o “ganancia bruta”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa el **margen relativo** (porcentaje de utilidad sobre ventas).  
@@ -710,3 +693,4 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
