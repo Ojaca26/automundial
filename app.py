@@ -408,8 +408,33 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
         return {"sql": None, "df": None, "error": str(e)}
 
 def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
-    st.info("🤔 Activando el agente SQL experto como plan B.")
-    prompt_sql = (f"Tu tarea es responder la pregunta consultando la tabla 'autollantas'.\n{hist_text}\nDevuelve ÚNICAMENTE una tabla en formato Markdown (con encabezados). NUNCA resumas ni expliques. El SQL interno NO DEBE CONTENER 'LIMIT' excepción si el cliente lo solicita.\nPregunta: {pregunta_usuario}")
+    st.info("🤔 Activando el agente SQL experto como plan B (con instrucciones mejoradas)...")
+
+    # Usamos el MISMO prompt detallado del agente principal para máxima consistencia
+    prompt_con_instrucciones = f"""
+    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario.
+    Al final, devuelve ÚNICAMENTE una tabla en formato Markdown (con encabezados). NUNCA resumas ni expliques.
+
+    ---
+    <<< NUEVA REGLA CRÍTICA: CÓMO MANEJAR CONSULTAS "TOP N" >>>
+    Existen DOS tipos de consultas "Top N". Debes identificar cuál es:
+    1.  Top N del Resultado TOTAL (Consulta Simple):
+        - CUÁNDO USAR: Si el usuario pide un "top 5", "los 10 mejores", etc., SIN especificar "por cada mes", "por línea" o cualquier otra agrupación.
+        - CÓMO HACERLO: Usa un `ORDER BY ... DESC` y `LIMIT N` al final.
+    2.  Top N DENTRO DE CADA GRUPO (Consulta Compleja):
+        - CUÁNDO USAR: Si el usuario pide un "top 5" explícitamente "de CADA mes", "por CADA línea", etc.
+        - CÓMO HACERLO: Aquí SÍ DEBES usar la función de ventana `ROW_NUMBER()` con un CTE.
+    ---
+    <<< REGLA DE ORO PARA BÚSQUEDA DE PRODUCTOS >>>
+    4. REGLA DE MARCAS: Cuando el usuario mencione “línea”, “familia de producto” o un nombre de marca específico, se está refiriendo al campo 'Nombre_Linea'.
+       - IMPORTANTE: Este campo contiene las marcas principales. Si el usuario pregunta por la facturación o ventas de una marca, debes filtrar usando este campo.
+       - Lista de Marcas Comunes: Goodyear, Firestone, Chevrolet, Bridgestone, Castrol, Hankook, Firemax, Pirelli, Shell, Terpel.
+    ---
+    
+    {hist_text}
+    Pregunta: "{pregunta_usuario}"
+    """
+
     try:
         with st.spinner("💬 Pidiendo al agente SQL que responda..."):
             res = agente_sql.invoke(prompt_sql)
@@ -693,4 +718,5 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
