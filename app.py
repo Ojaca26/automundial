@@ -372,7 +372,14 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
                         if str(row.iloc[0]).lower() == "total" else ""
                     ] * len(row)
 
-                styled_df = df.style.apply(highlight_total, axis=1)
+                # --- INICIO DE LAS LÍNEAS NUEVAS ---
+                # 1. Crea el diccionario para formatear TODAS las columnas numéricas
+                format_dict = {col: "{:,.0f}" for col in value_cols}
+
+                # 2. Aplica AMBOS estilos: el resaltado y el formato de número
+                styled_df = df.style.apply(highlight_total, axis=1).format(format_dict)
+                # --- FIN DE LAS LÍNEAS NUEVAS ---
+
                 return {"sql": sql_query_limpia, "df": df, "styled": styled_df}
 
         except Exception as e:
@@ -662,6 +669,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
