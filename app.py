@@ -286,6 +286,36 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario.
 
     ---
+    <<< NUEVA REGLA CRÍTICA: PARA CONSULTAS "TOP N" POR GRUPO >>>
+    1. Si el usuario pide un "top 5", "top 10", "los 5 mejores", etc., DE CADA mes, o cualquier otra categoría (un top N POR GRUPO), DEBES usar una función de ventana como ROW_NUMBER(). NO USES LIMIT.
+    2. La estructura correcta usa un Subquery o un CTE (Common Table Expression) para primero calcular el ranking y luego filtrar.
+
+    Ejemplo de estructura para "top 5 clientes por mes":
+    WITH RankedSales AS (
+      SELECT
+        MONTH(Fecha) AS Mes,
+        Nombre_Cliente,
+        SUM(Ventas_Reales) AS Total_Facturacion,
+        ROW_NUMBER() OVER(PARTITION BY MONTH(Fecha) ORDER BY SUM(Ventas_Reales) DESC) as rn
+      FROM
+        autollantas
+      WHERE
+        YEAR(Fecha) = 2025
+      GROUP BY
+        Mes,
+        Nombre_Cliente
+    )
+    SELECT
+      Mes,
+      Nombre_Cliente,
+      Total_Facturacion
+    FROM
+      RankedSales
+    WHERE
+      rn <= 5
+    ORDER BY
+      Mes, Total_Facturacion DESC;
+    
     <<< NUEVA REGLA: PARA VALORES MONETARIOS >>>
      1. Cuando el usuario mencione “margen”, “margen bruto” o “ganancia bruta”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa el **margen relativo** (porcentaje de utilidad sobre ventas).  
        Si el usuario pide explícitamente “margen en pesos”, “margen monetario” o “margen absoluto”, entonces usa la columna 'Margen_Bruto', que representa el **margen absoluto** (valor monetario de la utilidad bruta).  
@@ -321,11 +351,15 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     1. Cuando el usuario mencione “artículo”, “producto”, “ítem”, “referencia”, “nombre del repuesto” o “nombre del material”, se está refiriendo al campo 'Nombre_Articulo', el cual contiene el nombre comercial o técnico de cada producto registrado en inventario o en las órdenes.
         Este campo puede incluir detalles como:
         - Medidas o especificaciones (ej. 195/60R16, 11R-22.5)
-        - Marca o fabricante (ej. Yokohama, Firestone, Alliance)
         - Tipo o aplicación (ej. filtro de combustible, llanta, aire, repuesto)
     2. Si el usuario pregunta por un producto específico, usa `WHERE LOWER(Nombre_Articulo) LIKE '%palabra%'.
     3. Cuando el usuario mencione “cliente”, “empresa”, “razón social”, “comprador”, “contratante” o “nombre del cliente”, se está refiriendo al campo 'Nombre_Cliente', que representa la entidad (persona natural o jurídica) a la que se le vendió, facturó o prestó un servicio.
-    4. Cuando el usuario mencione “línea”, “marca”, “familia de producto”, “referencia comercial” o “proveedor principal”, se está refiriendo al campo 'Nombre_Linea', el cual identifica la marca, línea o categoría principal a la que pertenece un artículo.
+    4. **REGLA DE MARCAS**: Cuando el usuario mencione “línea”, “familia de producto” o un **nombre de marca específico**, se está refiriendo al campo 'Nombre_Linea'.
+       - **IMPORTANTE**: Este campo contiene las marcas principales. Si el usuario pregunta por la facturación o ventas de una marca, debes filtrar usando este campo.
+       - **Lista de Marcas Comunes**: Goodyear, Firestone, Chevrolet, Bridgestone, Castrol, Hankook, Firemax, Pirelli, Shell, Terpel.
+       - **Ejemplo Práctico**:
+         - **Pregunta del usuario**: "dame la facturación de Goodyear 2025"
+         - **SQL Correcto que debes generar**: SELECT SUM(Ventas_Reales) FROM autollantas WHERE LOWER(Nombre_Linea) LIKE '%goodyear%' AND YEAR(Fecha) = 2025;
     ---
     {hist_text}
     Pregunta del usuario: "{pregunta_usuario}"
@@ -676,10 +710,3 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
-
-
-
-
-
-
-
