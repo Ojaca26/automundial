@@ -436,15 +436,28 @@ def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
     """
 
     try:
-        with st.spinner("💬 Pidiendo al agente SQL que responda..."):
-            res = agente_sql.invoke(prompt_sql)
-            texto = res["output"] if isinstance(res, dict) and "output" in res else str(res)
-        st.info("📝 Intentando convertir la respuesta en una tabla de datos..."); df_md = markdown_table_to_df(texto)
-        if df_md.empty: st.warning("La conversión de Markdown a tabla no produjo filas. Se mostrará la salida cruda.")
-        return {"texto": texto, "df": df_md}
+        with st.spinner("💬 Pidiendo al agente SQL experto que responda..."):
+            # --- ¡CORRECCIÓN IMPORTANTE AQUÍ! ---
+            # Nos aseguramos de usar la variable correcta "prompt_con_instrucciones"
+            res = agente_sql.invoke(prompt_con_instrucciones)
+            
+            texto_salida = res["output"] if isinstance(res, dict) and "output" in res else str(res)
+        
+        st.info("📝 Intentando convertir la respuesta en una tabla de datos...");
+        df_md = markdown_table_to_df(texto_salida)
+        
+        if df_md.empty: 
+            st.warning("La conversión de Markdown a tabla no produjo filas. Se mostrará la salida cruda.")
+            return {"texto": texto_salida, "df": df_md}
+
+        # Generamos un texto introductorio para que no se vea vacío
+        resumen_texto = f"Entendido. Aquí tienes la respuesta a tu pregunta sobre '{pregunta_usuario}' generada por el agente experto:"
+        return {"texto": resumen_texto, "df": df_md}
+        
     except Exception as e:
         st.error(f"❌ El agente SQL experto también encontró un problema: {e}")
         return {"texto": f"[SQL_ERROR] {e}", "df": pd.DataFrame()}
+        
 def analizar_con_datos(pregunta_usuario: str, hist_text: str, df: pd.DataFrame | None, feedback: str = None):
     st.info("\n🧠 El analista experto está examinando los datos...")
     correccion_prompt = ""
@@ -718,5 +731,6 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
