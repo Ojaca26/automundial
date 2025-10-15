@@ -313,19 +313,15 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario.
 
     ---
-    <<< NUEVA REGLA CRÍTICA: PARA CONSULTAS "TOP N" POR GRUPO >>>
-    1. Si el usuario pide un "top 5", "top 10", "los 5 mejores", etc., DE CADA mes, o cualquier otra categoría (un top N POR GRUPO), DEBES usar una función de ventana como ROW_NUMBER(). NO USES LIMIT.
-    2. La estructura correcta usa un Subquery o un CTE (Common Table Expression) para primero calcular el ranking y luego filtrar.
-    - **EJEMPLO**:
-          - Pregunta: "dame el top 5 de los mejores clientes 2025"
-          - SQL Correcto:
-            SELECT Nombre_Cliente, SUM(Ventas_Reales) AS Total_Facturacion
-            FROM autollantas
-            WHERE YEAR(Fecha) = 2025
-            GROUP BY Nombre_Cliente
-            ORDER BY Total_Facturacion DESC
-            LIMIT 5;
-    
+    <<< NUEVA REGLA CRÍTICA: CÓMO MANEJAR CONSULTAS "TOP N" >>>
+    Existen DOS tipos de consultas "Top N". Debes identificar cuál es:
+    1.  Top N del Resultado TOTAL (Consulta Simple):
+        - CUÁNDO USAR: Si el usuario pide un "top 5", "los 10 mejores", etc., SIN especificar "por cada mes", "por línea" o cualquier otra agrupación.
+        - CÓMO HACERLO: Usa un `ORDER BY ... DESC` y `LIMIT N` al final.
+    2.  Top N DENTRO DE CADA GRUPO (Consulta Compleja):
+        - CUÁNDO USAR: Si el usuario pide un "top 5" explícitamente "de CADA mes", "por CADA línea", etc.
+        - CÓMO HACERLO: Aquí SÍ DEBES usar la función de ventana `ROW_NUMBER()` con un CTE.
+    ---
     <<< NUEVA REGLA: PARA VALORES MONETARIOS >>>
      1. Cuando el usuario mencione “margen”, “margen bruto” o “ganancia bruta”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa el **margen relativo** (porcentaje de utilidad sobre ventas).  
        Si el usuario pide explícitamente “margen en pesos”, “margen monetario” o “margen absoluto”, entonces usa la columna 'Margen_Bruto', que representa el **margen absoluto** (valor monetario de la utilidad bruta).  
@@ -376,57 +372,53 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
 
     Devuelve SOLO la consulta SQL (sin explicaciones).
     """
-    
+
     try:
         query_chain = create_sql_query_chain(llm_sql, db)
         sql_query_bruta = query_chain.invoke({"question": prompt_con_instrucciones})
         m = re.search(r'(?is)(select\b.+)$', sql_query_bruta.strip()); sql_query_limpia = m.group(1).strip() if m else sql_query_bruta.strip()
         sql_query_limpia = re.sub(r'(?is)^```sql|```$', '', sql_query_limpia).strip(); sql_query_limpia = _asegurar_select_only(sql_query_limpia)
         st.code(sql_query_limpia, language='sql')
+        
         with st.spinner("⏳ Ejecutando consulta..."):
             with db._engine.connect() as conn: df = pd.read_sql(text(sql_query_limpia), conn)
         st.success(f"✅ ¡Consulta ejecutada! Filas: {len(df)}")
 
+        # "Seguro" de Python para aplicar el TOP N si la IA lo olvida
         top_n_match = re.search(r'top\s*(\d+)', pregunta_usuario.lower())
         if top_n_match and "limit" not in sql_query_limpia.lower():
             try:
                 top_n = int(top_n_match.group(1))
-                # Si el DataFrame tiene más filas que el top N solicitado...
                 if len(df) > top_n:
                     st.info(f"💡 La IA olvidó el LIMIT. Aplicando Top {top_n} con Python.")
-                    # ...nos quedamos solo con las primeras N filas.
                     df = df.head(top_n)
             except Exception:
-                pass # Si algo falla, continuamos con el df completo
+                pass
 
-        try:
+         try:
             if not df.empty:
-                # Extraer año de la consulta SQL (si existe)
                 year_match = re.search(r"YEAR\([^)]*\)\s*=\s*(\d{4})", sql_query_limpia)
                 year_value = year_match.group(1) if year_match else None
 
-                # Agregar columna Año solo si se detecta
                 if year_value and "Año" not in df.columns:
                     df.insert(0, "Año", year_value)
 
-                # Detectar columnas numéricas para el total
                 value_cols = [c for c in df.select_dtypes("number").columns if not re.search(r"(?i)\b(mes|año|dia|fecha)\b", c)]
 
-                # Agregar fila Total (si aplica, y si hay más de una fila)
                 if value_cols and len(df) > 1:
                     total_row = {col: df[col].sum() if col in value_cols else "" for col in df.columns}
                     total_row[df.columns[0]] = "Total"
                     df.loc[len(df)] = total_row
-
         except Exception as e:
             st.warning(f"No se pudo agregar la fila de totales: {e}")
 
-        # IMPORTANTE: Ahora solo devolvemos el df crudo, sin el objeto "styled"
+        # IMPORTANTE: Solo devolvemos el df crudo.
         return {"sql": sql_query_limpia, "df": df}
 
     except Exception as e:
         st.warning(f"❌ Error en la consulta directa. Intentando método alternativo... Detalle: {e}")
         return {"sql": None, "df": None, "error": str(e)}
+
 
 def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
     st.info("🤔 Activando el agente SQL experto como plan B (con instrucciones mejoradas)...")
@@ -756,6 +748,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
