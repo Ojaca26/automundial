@@ -746,12 +746,3 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
-
-
-
-
-
-
-
-
-
