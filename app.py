@@ -409,15 +409,15 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
                     total_row = {col: df[col].sum() if col in value_cols else "" for col in df.columns}
                     total_row[df.columns[0]] = "Total"
                     df.loc[len(df)] = total_row
+            except Exception as e:
+                st.warning(f"No se pudo agregar la fila de totales: {e}")
+
+            # IMPORTANTE: Solo devolvemos el df crudo.
+            return {"sql": sql_query_limpia, "df": df}
+
         except Exception as e:
-            st.warning(f"No se pudo agregar la fila de totales: {e}")
-
-        # IMPORTANTE: Solo devolvemos el df crudo.
-        return {"sql": sql_query_limpia, "df": df}
-
-    except Exception as e:
-        st.warning(f"❌ Error en la consulta directa. Intentando método alternativo... Detalle: {e}")
-        return {"sql": None, "df": None, "error": str(e)}
+            st.warning(f"❌ Error en la consulta directa. Intentando método alternativo... Detalle: {e}")
+            return {"sql": None, "df": None, "error": str(e)}
 
 
 def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
@@ -748,6 +748,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
