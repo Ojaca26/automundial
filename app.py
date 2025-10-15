@@ -384,7 +384,6 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
             with db._engine.connect() as conn: df = pd.read_sql(text(sql_query_limpia), conn)
         st.success(f"✅ ¡Consulta ejecutada! Filas: {len(df)}")
 
-        # "Seguro" de Python para aplicar el TOP N si la IA lo olvida
         top_n_match = re.search(r'top\s*(\d+)', pregunta_usuario.lower())
         if top_n_match and "limit" not in sql_query_limpia.lower():
             try:
@@ -412,8 +411,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
         except Exception as e:
             st.warning(f"No se pudo agregar la fila de totales: {e}")
 
-            # IMPORTANTE: Solo devolvemos el df crudo.
-            return {"sql": sql_query_limpia, "df": df}
+        return {"sql": sql_query_limpia, "df": df}
 
     except Exception as e:
         st.warning(f"❌ Error en la consulta directa. Intentando método alternativo... Detalle: {e}")
@@ -748,6 +746,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
