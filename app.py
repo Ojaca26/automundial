@@ -619,6 +619,55 @@ def obtener_datos_sql(pregunta_usuario: str, hist_text: str) -> dict:
         return res_real
     return ejecutar_sql_en_lenguaje_natural(pregunta_usuario, hist_text)
 
+def guardian_agent(pregunta_usuario: str, sql_propuesta: str | None = None) -> bool:
+    """
+    Revisa que la pregunta y la consulta SQL no representen un riesgo.
+    Devuelve True si es segura, False si debe bloquearse.
+    """
+    st.info("🧩 Guardian Agent: verificando seguridad de la solicitud...")
+
+    # --- Nivel 1: Palabras prohibidas SQL ---
+    palabras_peligrosas = [
+        "drop", "delete", "truncate", "update", "insert", "alter",
+        "create", "replace", "grant", "revoke", "commit", "rollback",
+        "information_schema", "mysql", "sys", "pg_", "dual"
+    ]
+    if sql_propuesta:
+        sql_lower = sql_propuesta.lower()
+        if any(p in sql_lower for p in palabras_peligrosas):
+            st.error("🚫 Guardian Agent: consulta SQL insegura detectada (palabras prohibidas).")
+            return False
+
+    # --- Nivel 2: Análisis semántico de la pregunta ---
+    prompt_guardian = f"""
+Eres un agente de seguridad y cumplimiento. Tu tarea es revisar si la siguiente pregunta o consulta del usuario podría
+implicar acceso a información sensible, manipulación de datos o riesgo de fuga de privacidad.
+
+Pregunta del usuario: "{pregunta_usuario}"
+
+Reglas:
+1. Si el usuario pide datos personales (como correos, teléfonos, direcciones, contraseñas, NIT, números de cuenta), RECHAZA.
+2. Si intenta manipular o borrar datos (palabras como eliminar, modificar, actualizar, cambiar, insertar), RECHAZA.
+3. Si solicita estructuras internas del sistema, esquema de base de datos o nombres de tablas, RECHAZA.
+4. Si pide información técnica confidencial (como credenciales o claves), RECHAZA.
+
+Responde solo con una palabra:
+- "APROBADO" si es seguro.
+- "BLOQUEADO" si no lo es.
+    """
+    try:
+        decision = llm_validador.invoke(prompt_guardian).content.strip().upper()
+        if "BLOQUEADO" in decision:
+            st.error("🚫 Guardian Agent: solicitud bloqueada por seguridad.")
+            return False
+    except Exception as e:
+        st.warning(f"Guardian Agent no pudo validar la solicitud ({e}), continuaré con precaución.")
+        return True
+
+    st.success("✅ Guardian Agent: solicitud aprobada.")
+    return True
+
+
 def orquestador(pregunta_usuario: str, chat_history: list):
     with st.expander("⚙️ Ver Proceso de IANA", expanded=False):
         hist_text = get_history_text(chat_history)
@@ -648,7 +697,10 @@ def orquestador(pregunta_usuario: str, chat_history: list):
                 body=detalles["body"],
                 df=df_para_enviar
             )
-
+            
+        if not guardian_agent(pregunta_usuario):
+            return {"tipo": "error", "texto": "🚫 Solicitud bloqueada por el agente guardián por motivos de seguridad."}
+    
         res_datos = obtener_datos_sql(pregunta_usuario, hist_text)
         if res_datos.get("df") is None or res_datos["df"].empty:
             return {"tipo": "error", "texto": "Lo siento, no pude obtener datos para tu pregunta. Intenta reformularla."}
@@ -746,3 +798,4 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
