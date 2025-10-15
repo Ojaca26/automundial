@@ -481,6 +481,7 @@ def analizar_con_datos(pregunta_usuario: str, hist_text: str, df: pd.DataFrame |
         analisis = llm_analista.invoke(prompt_analisis).content
     st.success("💡 ¡Análisis completado!")
     return analisis
+    
 def responder_conversacion(pregunta_usuario: str, hist_text: str):
     st.info("💬 Activando modo de conversación...")
     prompt_personalidad = f"""Tu nombre es IANA, una IA amable de autollantas. Ayuda a analizar datos.\nSi el usuario hace un comentario casual, responde amablemente de forma natural, muy humana y redirígelo a tus capacidades.\n{hist_text}\nPregunta: "{pregunta_usuario}" """
@@ -559,7 +560,6 @@ def validar_y_corregir_respuesta_analista(pregunta_usuario: str, res_analisis: d
             else: return {"tipo": "error", "texto": f"Respuesta ambigua del validador: {resultado}"}
         except Exception as e: return {"tipo": "error", "texto": f"Excepción durante la validación: {e}"}
     return {"tipo": "error", "texto": "Se alcanzó el límite de intentos de validación."}
-
 
 
 def clasificar_intencion(pregunta: str) -> str:
@@ -646,10 +646,10 @@ implicar acceso a información sensible, manipulación de datos o riesgo de fuga
 Pregunta del usuario: "{pregunta_usuario}"
 
 Reglas:
-1. Si el usuario pide datos personales (como correos, teléfonos, direcciones, contraseñas, NIT, números de cuenta), RECHAZA.
-2. Si intenta manipular o borrar datos (palabras como eliminar, modificar, actualizar, cambiar, insertar), RECHAZA.
-3. Si solicita estructuras internas del sistema, esquema de base de datos o nombres de tablas, RECHAZA.
-4. Si pide información técnica confidencial (como credenciales o claves), RECHAZA.
+1. Bloquea solo si pide datos personales (correos, teléfonos, NIT, direcciones, contraseñas, claves, API keys).
+2. Bloquea solo si intenta modificar datos (eliminar, borrar, actualizar, insertar).
+3. Bloquea si pide estructura interna del sistema o base de datos.
+4. PERMITE expresamente solicitudes de análisis financiero, márgenes, ventas, costos, totales, promedios, cantidades, precios.
 
 Responde solo con una palabra:
 - "APROBADO" si es seguro.
@@ -798,4 +798,5 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
