@@ -613,7 +613,7 @@ def validar_y_corregir_respuesta_analista(pregunta_usuario: str, res_analisis: d
     for intento in range(MAX_INTENTOS):
         st.info(f"🕵️‍♀️ Supervisor de Calidad: Verificando análisis (Intento {intento + 1})..."); contenido_respuesta = res_analisis.get("analisis", "") or ""
         if not contenido_respuesta.strip(): return {"tipo": "error", "texto": "El análisis generado estaba vacío."}
-        df_preview = _df_preview(res_analisis.get("df"), 50) or "(sin vista previa de datos)"
+        df_preview = _df_preview(res_analisis.get("df"), 500) or "(sin vista previa de datos)"
         prompt_validacion = f"""Eres un supervisor de calidad estricto. Valida si el 'Análisis' se basa ESTRICTAMENTE en los 'Datos de Soporte'.\nFORMATO:\n- Si está 100% basado en los datos: APROBADO\n- Si alucina/inventa/no es relevante: RECHAZADO: [razón corta y accionable]\n---\nPregunta: "{pregunta_usuario}"\nDatos de Soporte:\n{df_preview}\n---\nAnálisis a evaluar:\n\"\"\"{contenido_respuesta}\"\"\"\n---\nEvaluación:"""
         try:
             resultado = llm_validador.invoke(prompt_validacion).content.strip(); up = resultado.upper()
@@ -873,6 +873,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
