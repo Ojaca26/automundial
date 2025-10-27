@@ -301,6 +301,38 @@ def style_dataframe(df: pd.DataFrame):
         # Si algo falla, devuelve el df sin formato para evitar un crash
         return df
 
+def limpiar_sql(sql_texto: str) -> str:
+    """
+    Limpia texto generado por LLM para dejar solo la consulta SQL válida.
+    - Elimina prefijos como 'sql', 'sql:', 'SQL\n'
+    - Elimina etiquetas ```sql``` o ``` ```
+    - Recorta espacios y saltos de línea.
+    """
+    if not sql_texto:
+        return ""
+
+    # Elimina etiquetas markdown primero
+    limpio = re.sub(r'```sql|```', '', sql_texto, flags=re.I)
+
+    # Elimina cualquier prefijo 'sql' seguido de espacio, ':' o salto de línea
+    limpio = re.sub(r'(?im)^\s*sql[\s:]+', '', limpio)
+
+    # Busca el primer SELECT si todavía hay texto explicativo
+    m = re.search(r'(?is)(select\b.+)$', limpio)
+    if m:
+        limpio = m.group(1)
+
+    # Limpieza final
+    return limpio.strip().rstrip(';')
+
+# ESTA FUNCIÓN TAMBIÉN ES NECESARIA (la usa ejecutar_sql_real)
+def _asegurar_select_only(sql: str) -> str:
+    sql_clean = sql.strip().rstrip(';')
+    if not re.match(r'(?is)^\s*select\b', sql_clean): raise ValueError("Solo se permite ejecutar consultas SELECT.")
+    sql_clean = re.sub(r'(?is)\blimit\s+\d+\s*$', '', sql_clean).strip()
+    return sql_clean
+
+
 
 def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     st.info("🤖 El agente de datos está traduciendo tu pregunta a SQL...")
@@ -835,6 +867,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
