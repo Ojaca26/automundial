@@ -688,6 +688,9 @@ def obtener_datos_sql(pregunta_usuario: str, hist_text: str) -> dict:
         return res_real
     return ejecutar_sql_en_lenguaje_natural(pregunta_usuario, hist_text)
 
+
+# REEMPLAZA TU FUNCIÓN guardian_agent CON ESTA:
+
 def guardian_agent(pregunta_usuario: str, sql_propuesta: str | None = None) -> bool:
     """
     Revisa que la pregunta y la consulta SQL no representen un riesgo.
@@ -695,7 +698,7 @@ def guardian_agent(pregunta_usuario: str, sql_propuesta: str | None = None) -> b
     """
     st.info("🧩 Guardian Agent: verificando seguridad de la solicitud...")
 
-    # --- Nivel 1: Palabras prohibidas SQL ---
+    # --- Nivel 1: Palabras prohibidas SQL (Se mantiene igual) ---
     palabras_peligrosas = [
         "drop", "delete", "truncate", "update", "insert", "alter",
         "create", "replace", "grant", "revoke", "commit", "rollback",
@@ -708,6 +711,7 @@ def guardian_agent(pregunta_usuario: str, sql_propuesta: str | None = None) -> b
             return False
 
     # --- Nivel 2: Análisis semántico de la pregunta ---
+    # --- ⬇️ HEMOS MODIFICADO ESTE PROMPT ⬇️ ---
     prompt_guardian = f"""
 Eres un agente de seguridad y cumplimiento. Tu tarea es revisar si la siguiente pregunta o consulta del usuario podría
 implicar acceso a información sensible, manipulación de datos o riesgo de fuga de privacidad.
@@ -716,14 +720,17 @@ Pregunta del usuario: "{pregunta_usuario}"
 
 Reglas:
 1. Bloquea solo si pide datos personales (correos, teléfonos, NIT, direcciones, contraseñas, claves, API keys).
-2. Bloquea solo si intenta modificar datos (eliminar, borrar, actualizar, insertar).
-3. Bloquea si pide estructura interna del sistema o base de datos.
-4. PERMITE expresamente solicitudes de análisis financiero, márgenes, ventas, costos, totales, promedios, cantidades, precios.
+2. Bloquea si intenta modificar datos con verbos peligrosos (eliminar, borrar, actualizar, insertar, modificar, crear, drop, alter).
+3. Bloquea si pide estructura interna del sistema o base de datos sensible.
+4. PERMITE expresamente solicitudes de análisis financiero (márgenes, ventas, costos, totales, promedios, cantidades, precios).
+5. **NUEVA REGLA:** PERMITE verbos analíticos comunes (ej. "agrega la columna mes", "agrupa por", "compara con", "incluye el cliente") ya que se refieren a la *presentación* de los datos (un SELECT), no a la *modificación* de la base de datos (un UPDATE/INSERT).
 
 Responde solo con una palabra:
 - "APROBADO" si es seguro.
 - "BLOQUEADO" si no lo es.
     """
+    # --- ⬆️ FIN DE LA MODIFICACIÓN ⬆️ ---
+    
     try:
         decision = llm_validador.invoke(prompt_guardian).content.strip().upper()
         if "BLOQUEADO" in decision:
@@ -735,7 +742,6 @@ Responde solo con una palabra:
 
     st.success("✅ Guardian Agent: solicitud aprobada.")
     return True
-
 
 def orquestador(pregunta_usuario: str, chat_history: list):
     with st.expander("⚙️ Ver Proceso de IANA", expanded=False):
@@ -867,6 +873,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
