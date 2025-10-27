@@ -12,8 +12,7 @@ from langchain_openai import ChatOpenAI
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import create_sql_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
-from langchain_community.chains.sql_database import create_sql_query_chain
-
+from langchain_experimental.sql import SQLDatabaseChain
 
 # Micrófono en vivo (frontend) + fallback SR
 from streamlit_mic_recorder import speech_to_text, mic_recorder
@@ -301,117 +300,188 @@ def style_dataframe(df: pd.DataFrame):
         # Si algo falla, devuelve el df sin formato para evitar un crash
         return df
 
+
 def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     st.info("🤖 El agente de datos está traduciendo tu pregunta a SQL...")
-    
-    prompt_con_instrucciones = f"""
-    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario.
 
-    ---
-    <<< NUEVA REGLA CRÍTICA: CÓMO MANEJAR CONSULTAS "TOP N" >>>
-    Existen DOS tipos de consultas "Top N". Debes identificar cuál es:
-    1.  Top N del Resultado TOTAL (Consulta Simple):
-        - CUÁNDO USAR: Si el usuario pide un "top 5", "los 10 mejores", etc., SIN especificar "por cada mes", "por línea" o cualquier otra agrupación.
-        - CÓMO HACERLO: Usa un `ORDER BY ... DESC` y `LIMIT N` al final.
-    2.  Top N DENTRO DE CADA GRUPO (Consulta Compleja):
-        - CUÁNDO USAR: Si el usuario pide un "top 5" explícitamente "de CADA mes", "por CADA línea", etc.
-        - CÓMO HACERLO: Aquí SÍ DEBES usar la función de ventana `ROW_NUMBER()` con un CTE.
-    ---
-    <<< NUEVA REGLA: PARA VALORES MONETARIOS >>>
-     1. Cuando el usuario mencione “margen”, “margen bruto” o “ganancia bruta”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa el **margen relativo** (porcentaje de utilidad sobre ventas).  
-       Si el usuario pide explícitamente “margen en pesos”, “margen monetario” o “margen absoluto”, entonces usa la columna 'Margen_Bruto', que representa el **margen absoluto** (valor monetario de la utilidad bruta).  
-       Ejemplo:  
-       - “Dame el margen bruto por mes” → usa `Porcentaje_Margen_Bruto`  
-       - “Dame el margen absoluto en pesos” → usa `Margen_Bruto`
-        
-        ❗Nunca promedies el margen ni uses AVG(Porcentaje_Margen_Bruto).  
-        El margen relativo SIEMPRE debe calcularse dinámicamente como:
-            (1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100
-        o equivalente:
-            (SUM(Ventas_Reales - Costo_Reales) / SUM(Ventas_Reales)) * 100
-        según el nivel de agrupación.
-        Ejemplo:
-        SELECT MONTH(Fecha) AS Mes, 
-               (1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100 AS Margen_Porcentual
-        FROM autollantas
-        GROUP BY MONTH(Fecha);
-        
-    2. Cuando el usuario mencione “porcentaje de margen”, “% margen”, “margen porcentual” o “margen en porcentaje”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa la proporción del margen bruto sobre las ventas reales.
-    3. Cuando el usuario mencione “unidades vendidas”, “cantidad de productos vendidos” o “número de ventas”, se está refiriendo al campo 'Unidades_Vendidas'.
-    4. Cuando el usuario pregunte por “precio promedio”, “valor medio de venta” o “promedio de precios”, se refiere al campo 'Precio_Promedio', que corresponde al promedio del valor unitario de las ventas.
-    5. Cuando el usuario mencione “ventas reales”, “ventas totales” o “valor vendido”, se está refiriendo al campo 'Ventas_Reales', que representa el total monetario facturado o reconocido como ingreso real.
-    6. Cuando el usuario mencione “costos reales”, “costos totales” o “valor del costo”, se refiere al campo Costo_Reales, que muestra el total de costos asociados a las ventas (sin incluir margen ni impuestos).
-    7. Ejemplo: Si la pregunta es "¿cuál es el total facturado?", la consulta debería ser algo como `SELECT SUM(Ventas_Reales) FROM autollantas;`. Aplica este patrón a otras métricas.
-    ---
-    <<< REGLA CRÍTICA PARA FILTRAR POR FECHA >>>
-    1. Tu tabla tiene una columna de fecha llamada `Fecha`.
-    2. Si el usuario especifica un año (ej: "del 2025", "en 2024"), SIEMPRE debes añadir una condición `WHERE YEAR(Fecha) = [año]` a la consulta.
-    3. Ejemplo: "dame las ventas de 2025" -> DEBE INCLUIR `WHERE YEAR(Fecha) = 2025`.
-    ---
-    <<< REGLA DE ORO PARA BÚSQUEDA DE PRODUCTOS >>>
-    1. Cuando el usuario mencione “artículo”, “producto”, “ítem”, “referencia”, “nombre del repuesto” o “nombre del material”, se está refiriendo al campo 'Nombre_Articulo', el cual contiene el nombre comercial o técnico de cada producto registrado en inventario o en las órdenes.
-        Este campo puede incluir detalles como:
-        - Medidas o especificaciones (ej. 195/60R16, 11R-22.5)
-        - Tipo o aplicación (ej. filtro de combustible, llanta, aire, repuesto)
-    2. Si el usuario pregunta por un producto específico, usa `WHERE LOWER(Nombre_Articulo) LIKE '%palabra%'.
-    3. Cuando el usuario mencione “cliente”, “empresa”, “razón social”, “comprador”, “contratante” o “nombre del cliente”, se está refiriendo al campo 'Nombre_Cliente', que representa la entidad (persona natural o jurídica) a la que se le vendió, facturó o prestó un servicio.
-    4. **REGLA DE MARCAS**: Cuando el usuario mencione “línea”, “familia de producto” o un **nombre de marca específico**, se está refiriendo al campo 'Nombre_Linea'.
-       - **IMPORTANTE**: Este campo contiene las marcas principales. Si el usuario pregunta por la facturación o ventas de una marca, debes filtrar usando este campo.
-       - **Lista de Marcas Comunes**: Goodyear, Firestone, Chevrolet, Bridgestone, Castrol, Hankook, Firemax, Pirelli, Shell, Terpel.
-       - **Ejemplo Práctico**:
-         - **Pregunta del usuario**: "dame la facturación de Goodyear 2025"
-         - **SQL Correcto que debes generar**: SELECT SUM(Ventas_Reales) FROM autollantas WHERE LOWER(Nombre_Linea) LIKE '%goodyear%' AND YEAR(Fecha) = 2025;
-    ---
+    # --- Obtener Esquema ---
+    try:
+        # Obtener la info solo de la tabla 'autollantas'
+        schema_info = db.get_table_info(table_names=["autollantas"])
+    except Exception as e:
+        st.error(f"Error crítico: No se pudo obtener el esquema de la tabla 'autollantas'. {e}")
+        schema_info = "Error al obtener esquema. Asume columnas estándar."
+
+    # --- Crear Prompt ---
+    prompt_con_instrucciones = f"""
+    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) para responder la pregunta del usuario, basándote ESTRICTAMENTE en el siguiente esquema de tabla.
+
+    --- ESQUEMA DE LA TABLA 'autollantas' ---
+    {schema_info}
+    --- FIN DEL ESQUEMA ---
+
+    --- REGLAS DE NEGOCIO Y FORMATO ---
+    <<< MANEJO DE "TOP N" >>>
+    1. Top N TOTAL: Si pide "top 5", "los 10 mejores", SIN agrupar -> Usa `ORDER BY ... DESC LIMIT N`.
+    2. Top N POR GRUPO: Si pide "top 5 de CADA mes", "por CADA línea" -> Usa `ROW_NUMBER()` con CTE.
+
+    <<< VALORES MONETARIOS >>>
+    1. "margen"/"margen bruto": Usa `Porcentaje_Margen_Bruto` (relativo). Si pide "margen en pesos"/"absoluto" -> Usa `Margen_Bruto`.
+    2. ❗ NUNCA USES AVG(Porcentaje_Margen_Bruto). Calcula dinámicamente: `(1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100` o `(SUM(Ventas_Reales - Costo_Reales) / SUM(Ventas_Reales)) * 100`.
+    3. "% margen"/"margen porcentual": Usa el cálculo dinámico anterior o `Porcentaje_Margen_Bruto` si aplica directamente.
+    4. "unidades vendidas": Usa `Unidades_Vendidas`.
+    5. "precio promedio": Usa `Precio_Promedio`.
+    6. "ventas reales"/"ventas totales": Usa `Ventas_Reales`.
+    7. "costos reales": Usa `Costo_Reales`.
+
+    <<< FILTRAR POR FECHA >>>
+    1. Usa la columna `Fecha`.
+    2. Si pide año (ej: "2025") -> Añade `WHERE YEAR(Fecha) = [año]`.
+
+    <<< BÚSQUEDA DE PRODUCTOS/CLIENTES/MARCAS >>>
+    1. "artículo"/"producto": Usa `WHERE LOWER(Nombre_Articulo) LIKE '%palabra%'`.
+    2. "cliente": Usa `WHERE LOWER(Nombre_Cliente) LIKE '%palabra%'`.
+    3. "línea"/"marca" (Goodyear, etc.): Usa `WHERE LOWER(Nombre_Linea) LIKE '%marca%'`.
+
+    --- CONTEXTO Y PREGUNTA ---
     {hist_text}
     Pregunta del usuario: "{pregunta_usuario}"
 
-    Devuelve SOLO la consulta SQL (sin explicaciones).
-    """
+    --- SALIDA ---
+    Devuelve SOLO la consulta SQL (sin explicaciones, sin markdown ```sql```).
+    """ # Fin del prompt
 
     try:
-        query_chain = create_sql_query_chain(llm_sql, db)
-        sql_query_bruta = query_chain.invoke({"question": prompt_con_instrucciones})
-        m = re.search(r'(?is)(select\b.+)$', sql_query_bruta.strip()); sql_query_limpia = m.group(1).strip() if m else sql_query_bruta.strip()
-        sql_query_limpia = re.sub(r'(?is)^```sql|```$', '', sql_query_limpia).strip(); sql_query_limpia = _asegurar_select_only(sql_query_limpia)
-        st.code(sql_query_limpia, language='sql')
-        
+        # --- Usar SQLDatabaseChain para GENERAR SQL ---
+        chain = SQLDatabaseChain.from_llm(llm_sql, db, verbose=True, return_sql=True)
+        # Invocamos la cadena SOLO para obtener el SQL (sin ejecutarlo directamente)
+        # Usamos .invoke() que es el método más nuevo y estándar
+        result = chain.invoke(prompt_con_instrucciones)
+
+        # Extraer el SQL generado (puede estar en 'result' o 'intermediate_steps')
+        if isinstance(result, dict) and "result" in result:
+             sql_query_bruta = result.get("result", "")
+        elif isinstance(result, str): # A veces devuelve solo el string SQL
+             sql_query_bruta = result
+        else:
+             sql_query_bruta = "" # Fallback por si acaso
+
+        # Intentar extraer de intermediate_steps si 'result' está vacío (algunas versiones lo ponen ahí)
+        if not sql_query_bruta and isinstance(result, dict) and "intermediate_steps" in result:
+             try:
+                 # Busca el paso que contenga la consulta SQL
+                 for step in result["intermediate_steps"]:
+                     if isinstance(step, str) and step.strip().upper().startswith("SELECT"):
+                         sql_query_bruta = step
+                         break
+                     elif isinstance(step, dict) and 'sql_cmd' in step: # Formato más nuevo
+                         sql_query_bruta = step['sql_cmd']
+                         break
+             except Exception:
+                 pass # Si falla la extracción, sql_query_bruta seguirá vacío
+
+
+        if not sql_query_bruta:
+             st.error("La cadena SQL no devolvió una consulta SQL válida.")
+             return {"sql": None, "df": None, "error": "No se generó SQL."}
+
+        st.text_area("🧩 SQL generado por el modelo:", sql_query_bruta, height=100)
+
+        # --- Limpieza del SQL ---
+        sql_query_limpia = limpiar_sql(sql_query_bruta)
+
+        if not sql_query_limpia.lower().startswith("select"):
+            m = re.search(r'(?is)(select\b.+)$', sql_query_limpia)
+            if m:
+                sql_query_limpia = m.group(1).strip()
+
+        sql_query_limpia = _asegurar_select_only(sql_query_limpia)
+
+        if not sql_query_limpia:
+             st.error("El SQL generado quedó vacío después de la limpieza.")
+             return {"sql": None, "df": None, "error": "SQL vacío tras limpieza."}
+
+
+        st.code(sql_query_limpia, language="sql")
+
+        # --- Ejecución del SQL ---
         with st.spinner("⏳ Ejecutando consulta..."):
-            with db._engine.connect() as conn: df = pd.read_sql(text(sql_query_limpia), conn)
+            with db._engine.connect() as conn:
+                df = pd.read_sql(text(sql_query_limpia), conn)
+
         st.success(f"✅ ¡Consulta ejecutada! Filas: {len(df)}")
 
-        top_n_match = re.search(r'top\s*(\d+)', pregunta_usuario.lower())
-        if top_n_match and "limit" not in sql_query_limpia.lower():
-            try:
-                top_n = int(top_n_match.group(1))
-                if len(df) > top_n:
-                    st.info(f"💡 La IA olvidó el LIMIT. Aplicando Top {top_n} con Python.")
-                    df = df.head(top_n)
-            except Exception:
-                pass
-
+        # --- Post-procesamiento (Completo y Corregido) ---
+        value_cols = [] # Definir fuera del try para tenerla disponible
         try:
             if not df.empty:
+                # Añadir columna Año si es relevante
                 year_match = re.search(r"YEAR\([^)]*\)\s*=\s*(\d{4})", sql_query_limpia)
                 year_value = year_match.group(1) if year_match else None
-
                 if year_value and "Año" not in df.columns:
                     df.insert(0, "Año", year_value)
 
-                value_cols = [c for c in df.select_dtypes("number").columns if not re.search(r"(?i)\b(mes|año|dia|fecha)\b", c)]
+                # Identificar columnas de valor numérico (excluyendo fecha/tiempo)
+                value_cols = [
+                    c for c in df.select_dtypes("number").columns
+                    if not re.search(r"(?i)\b(mes|año|dia|fecha|id|codigo)\b", c) # Excluimos IDs también
+                ]
 
+                # Añadir fila de Total (si hay más de una fila y columnas de valor)
                 if value_cols and len(df) > 1:
-                    total_row = {col: df[col].sum() if col in value_cols else "" for col in df.columns}
-                    total_row[df.columns[0]] = "Total"
-                    df.loc[len(df)] = total_row
+                    total_row = {}
+                    for col in df.columns:
+                        if col in value_cols:
+                            # Asegurarse que la columna sea numérica antes de sumar
+                            if pd.api.types.is_numeric_dtype(df[col]):
+                                total_row[col] = df[col].sum()
+                            else:
+                                total_row[col] = np.nan # Usar NaN si no es numérica
+                        # Para columnas numéricas que NO son de valor (ej: Mes, Año), poner NaN
+                        elif pd.api.types.is_numeric_dtype(df[col]):
+                            total_row[col] = np.nan
+                        # Para columnas de texto, poner string vacío
+                        else:
+                            total_row[col] = ""
+
+                    # Poner 'Total' en la primera columna (cualquiera que sea)
+                    first_col_name = df.columns[0]
+                    total_row[first_col_name] = "Total"
+
+                    # Usar pd.concat para añadir la fila
+                    df = pd.concat([df, pd.DataFrame([total_row])], ignore_index=True)
+
+            # --- Aplicar Estilos ---
+            # Definir función de resaltado DENTRO del try
+            def highlight_total(row):
+                # Comprobar si el valor de la primera columna es 'Total' (insensible a mayúsculas/minúsculas)
+                if isinstance(row.iloc[0], str) and row.iloc[0].lower() == "total":
+                    return ["font-weight: bold; background-color: #f8f9fa; border-top: 2px solid #999;"] * len(row)
+                else:
+                    return [""] * len(row)
+
+            # Aplicar resaltado
+            styled_df = df.style.apply(highlight_total, axis=1)
+
+            # Aplicar formato de miles a las columnas de valor identificadas antes
+            if value_cols:
+                format_map = {col: "{:,.0f}" for col in value_cols}
+                 # na_rep='' oculta los NaN que pusimos en columnas como 'Mes' en la fila Total
+                styled_df = styled_df.format(format_map, na_rep="")
+
+            # Retornar SQL, DataFrame original Y DataFrame con estilo
+            return {"sql": sql_query_limpia, "df": df, "styled": styled_df}
+
         except Exception as e:
-            st.warning(f"No se pudo agregar la fila de totales: {e}")
+            st.warning(f"⚠️ No se pudo aplicar formato ni totales: {e}")
+            # Si falla el estilo, al menos devolvemos los datos crudos
+            return {"sql": sql_query_limpia, "df": df}
 
-        return {"sql": sql_query_limpia, "df": df}
-
+    # --- Manejo de error general en la generación o ejecución ---
     except Exception as e:
         st.warning(f"❌ Error en la consulta directa. Intentando método alternativo... Detalle: {e}")
+        # Considera llamar a ejecutar_sql_en_lenguaje_natural aquí como fallback si es necesario
         return {"sql": None, "df": None, "error": str(e)}
-
 
 def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
     st.info("🤔 Activando el agente SQL experto como plan B (con instrucciones mejoradas)...")
@@ -793,6 +863,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
