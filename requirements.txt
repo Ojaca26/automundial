@@ -1,11 +1,11 @@
-streamlit==1.50.0
-pandas==2.3.3
-sqlalchemy==2.0.44
-pymysql==1.1.2
-langchain==1.0.2
-langchain-community==0.4
-langchain-openai==1.0.1
-langchain-experimental>=0.3.0 # Añade esta línea compatible
+streamlit>=1.37.0
+pandas>=2.0.0
+sqlalchemy>=2.0.30
+pymysql>=1.1.0
+langchain==0.2.1
+langchain-community==0.2.1
+langchain-experimental==0.0.60
+langchain-openai
 streamlit-mic-recorder==0.0.8
-SpeechRecognition==3.14.3
-numpy==2.3.4
+SpeechRecognition>=3.10.0
+numpy
