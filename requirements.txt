@@ -1,11 +1,10 @@
-streamlit>=1.50.0 # Usa la versión que te instaló Streamlit Cloud
-pandas>=2.0.0
-sqlalchemy>=2.0.30
-pymysql>=1.1.0
-langchain>=1.0.0       # Asegura Langchain 1.0 o superior
-langchain-community>=0.4.0 # Coincide con la versión instalada en logs
-langchain-openai>=1.0.0    # Coincide con la versión de langchain
+streamlit==1.50.0
+pandas==2.3.3
+sqlalchemy==2.0.44
+pymysql==1.1.2
+langchain==1.0.2
+langchain-community==0.4
+langchain-openai==1.0.1
 streamlit-mic-recorder==0.0.8
-SpeechRecognition>=3.10.0
-numpy # Necesario para el formato de tablas
-langchain-experimental>=0.0.50
+SpeechRecognition==3.14.3
+numpy==2.3.4
