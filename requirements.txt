@@ -8,3 +8,4 @@ langchain-openai>=1.0.0    # Coincide con la versión de langchain
 streamlit-mic-recorder==0.0.8
 SpeechRecognition>=3.10.0
 numpy # Necesario para el formato de tablas
+langchain-experimental>=0.0.50
