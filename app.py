@@ -313,9 +313,9 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
         st.error(f"Error crítico: No se pudo obtener el esquema de la tabla 'autollantas'. {e}")
         schema_info = "Error al obtener esquema. Asume columnas estándar."
 
-    # --- Crear Prompt ---
+    # --- Crear Prompt (Asegúrate que el prompt esté completo aquí) ---
     prompt_con_instrucciones = f"""
-    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) para responder la pregunta del usuario, basándote ESTRICTAMENTE en el siguiente esquema de tabla.
+    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario, basándote ESTRICTAMENTE en el siguiente esquema de tabla.
 
     --- ESQUEMA DE LA TABLA 'autollantas' ---
     {schema_info}
@@ -354,33 +354,16 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
 
     try:
         # --- Usar SQLDatabaseChain para GENERAR SQL ---
-        chain = SQLDatabaseChain.from_llm(llm_sql, db, verbose=True, return_sql=True)
-        # Invocamos la cadena SOLO para obtener el SQL (sin ejecutarlo directamente)
-        # Usamos .invoke() que es el método más nuevo y estándar
-        result = chain.invoke(prompt_con_instrucciones)
-
-        # Extraer el SQL generado (puede estar en 'result' o 'intermediate_steps')
-        if isinstance(result, dict) and "result" in result:
-             sql_query_bruta = result.get("result", "")
-        elif isinstance(result, str): # A veces devuelve solo el string SQL
-             sql_query_bruta = result
-        else:
-             sql_query_bruta = "" # Fallback por si acaso
-
-        # Intentar extraer de intermediate_steps si 'result' está vacío (algunas versiones lo ponen ahí)
-        if not sql_query_bruta and isinstance(result, dict) and "intermediate_steps" in result:
-             try:
-                 # Busca el paso que contenga la consulta SQL
-                 for step in result["intermediate_steps"]:
-                     if isinstance(step, str) and step.strip().upper().startswith("SELECT"):
-                         sql_query_bruta = step
-                         break
-                     elif isinstance(step, dict) and 'sql_cmd' in step: # Formato más nuevo
-                         sql_query_bruta = step['sql_cmd']
-                         break
-             except Exception:
-                 pass # Si falla la extracción, sql_query_bruta seguirá vacío
-
+        # NOTA: Con estas versiones antiguas, es posible que 'return_sql' no exista,
+        # pero 'SQLDatabaseChain' por defecto ponía el SQL en 'intermediate_steps'.
+        # El método .invoke() es de versiones más nuevas, usaremos .run()
+        
+        # Con la versión 0.2.1, es mejor usar la llamada al LLM directa que funcionó en Ventus.
+        # Vamos a replicar el método de VENTUS (LLM.invoke) que es más seguro.
+        
+        # ⬇️ --- REPLICANDO EL MÉTODO DE VENTUS --- ⬇️
+        sql_query_bruta = llm_sql.invoke(prompt_con_instrucciones).content
+        # ⬆️ --- FIN DEL MÉTODO DE VENTUS --- ⬆️
 
         if not sql_query_bruta:
              st.error("La cadena SQL no devolvió una consulta SQL válida.")
@@ -389,7 +372,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
         st.text_area("🧩 SQL generado por el modelo:", sql_query_bruta, height=100)
 
         # --- Limpieza del SQL ---
-        sql_query_limpia = limpiar_sql(sql_query_bruta)
+        sql_query_limpia = limpiar_sql(sql_query_bruta) # Usa tu función limpiar_sql
 
         if not sql_query_limpia.lower().startswith("select"):
             m = re.search(r'(?is)(select\b.+)$', sql_query_limpia)
@@ -425,7 +408,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
                 # Identificar columnas de valor numérico (excluyendo fecha/tiempo)
                 value_cols = [
                     c for c in df.select_dtypes("number").columns
-                    if not re.search(r"(?i)\b(mes|año|dia|fecha|id|codigo)\b", c) # Excluimos IDs también
+                    if not re.search(r"(?i)\b(mes|año|dia|fecha|id|codigo)\b", c)
                 ]
 
                 # Añadir fila de Total (si hay más de una fila y columnas de valor)
@@ -433,56 +416,44 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
                     total_row = {}
                     for col in df.columns:
                         if col in value_cols:
-                            # Asegurarse que la columna sea numérica antes de sumar
                             if pd.api.types.is_numeric_dtype(df[col]):
                                 total_row[col] = df[col].sum()
                             else:
-                                total_row[col] = np.nan # Usar NaN si no es numérica
-                        # Para columnas numéricas que NO son de valor (ej: Mes, Año), poner NaN
+                                total_row[col] = np.nan
                         elif pd.api.types.is_numeric_dtype(df[col]):
                             total_row[col] = np.nan
-                        # Para columnas de texto, poner string vacío
                         else:
                             total_row[col] = ""
 
-                    # Poner 'Total' en la primera columna (cualquiera que sea)
                     first_col_name = df.columns[0]
                     total_row[first_col_name] = "Total"
-
-                    # Usar pd.concat para añadir la fila
+                    
                     df = pd.concat([df, pd.DataFrame([total_row])], ignore_index=True)
 
             # --- Aplicar Estilos ---
-            # Definir función de resaltado DENTRO del try
             def highlight_total(row):
-                # Comprobar si el valor de la primera columna es 'Total' (insensible a mayúsculas/minúsculas)
                 if isinstance(row.iloc[0], str) and row.iloc[0].lower() == "total":
                     return ["font-weight: bold; background-color: #f8f9fa; border-top: 2px solid #999;"] * len(row)
                 else:
                     return [""] * len(row)
 
-            # Aplicar resaltado
             styled_df = df.style.apply(highlight_total, axis=1)
 
-            # Aplicar formato de miles a las columnas de valor identificadas antes
             if value_cols:
                 format_map = {col: "{:,.0f}" for col in value_cols}
-                 # na_rep='' oculta los NaN que pusimos en columnas como 'Mes' en la fila Total
                 styled_df = styled_df.format(format_map, na_rep="")
 
-            # Retornar SQL, DataFrame original Y DataFrame con estilo
             return {"sql": sql_query_limpia, "df": df, "styled": styled_df}
 
         except Exception as e:
             st.warning(f"⚠️ No se pudo aplicar formato ni totales: {e}")
-            # Si falla el estilo, al menos devolvemos los datos crudos
             return {"sql": sql_query_limpia, "df": df}
 
-    # --- Manejo de error general en la generación o ejecución ---
+    # --- Manejo de error general ---
     except Exception as e:
         st.warning(f"❌ Error en la consulta directa. Intentando método alternativo... Detalle: {e}")
-        # Considera llamar a ejecutar_sql_en_lenguaje_natural aquí como fallback si es necesario
         return {"sql": None, "df": None, "error": str(e)}
+
 
 def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
     st.info("🤔 Activando el agente SQL experto como plan B (con instrucciones mejoradas)...")
@@ -864,6 +835,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
