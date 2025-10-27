@@ -10,8 +10,8 @@ from sqlalchemy import text
 # LangChain + Gemini
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities import SQLDatabase
-from langchain.agents import create_sql_agent
-from langchain.agents.agent_toolkits import SQLDatabaseToolkit
+from langchain_community.agent_toolkits import create_sql_agent
+from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain.chains import create_sql_query_chain
 
 #from langchain_google_genai import ChatGoogleGenerativeAI
@@ -798,5 +798,6 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
