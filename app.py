@@ -6,6 +6,7 @@ import re
 import io
 from typing import Optional
 from sqlalchemy import text
+from typing import Optional
 
 # LangChain + Gemini
 from langchain_openai import ChatOpenAI
@@ -245,6 +246,19 @@ def get_history_text(chat_history: list, n_turns=3) -> str:
             history_text.append(f"{role}: {text_content}")
     if not history_text: return ""
     return "\n--- Contexto de Conversación Anterior ---\n" + "\n".join(history_text) + "\n--- Fin del Contexto ---\n"
+
+def get_last_sql_from_history(chat_history: list) -> Optional[str]:
+    """Extrae la última consulta SQL exitosa del historial."""
+    st.info("Buscando la última consulta SQL en el historial...")
+    for msg in reversed(chat_history):
+        if msg.get("role") == "assistant":
+            content = msg.get("content", {})
+            if isinstance(content, dict) and content.get("sql"):
+                st.success("¡Consulta anterior encontrada!")
+                return content["sql"]
+    st.warning("No se encontró una consulta SQL previa en el historial.")
+    return None
+    
 def markdown_table_to_df(texto: str) -> pd.DataFrame:
     lineas = [l.rstrip() for l in texto.splitlines() if l.strip().startswith('|')]
     if not lineas: return pd.DataFrame()
@@ -268,6 +282,7 @@ def interpretar_resultado_sql(res: dict) -> dict:
             res["texto"] = f"La respuesta para '{nombre_columna}' es: **{valor}**"
             st.info("💡 Resultado numérico interpretado para una respuesta directa.")
     return res
+    
 def _asegurar_select_only(sql: str) -> str:
     sql_clean = sql.strip().rstrip(';')
     if not re.match(r'(?is)^\s*select\b', sql_clean): raise ValueError("Solo se permite ejecutar consultas SELECT.")
@@ -333,7 +348,8 @@ def _asegurar_select_only(sql: str) -> str:
     return sql_clean
 
 
-def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
+
+def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, last_sql: Optional[str] = None):
     st.info("🤖 El agente de datos está traduciendo tu pregunta a SQL...")
 
     # --- Obtener Esquema ---
@@ -344,6 +360,21 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
         st.error(f"Error crítico: No se pudo obtener el esquema de la tabla 'autollantas'. {e}")
         schema_info = "Error al obtener esquema. Asume columnas estándar."
 
+    
+    # --- ⬇️ INICIO DE LA MODIFICACIÓN DEL PROMPT (PASO 4) ⬇️ ---
+    
+    # Crear un bloque de "consulta anterior" solo si existe
+    last_sql_context = ""
+    if last_sql:
+        last_sql_context = f"""
+    --- CONSULTA ANTERIOR (Contexto) ---
+    La última consulta SQL que ejecutaste fue:
+    ```sql
+    {last_sql}
+    ```
+    --- FIN CONSULTA ANTERIOR ---
+    """
+
     # --- Crear Prompt (Asegúrate que el prompt esté completo aquí) ---
     prompt_con_instrucciones = f"""
     Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario, basándote ESTRICTAMENTE en el siguiente esquema de tabla.
@@ -352,7 +383,15 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     {schema_info}
     --- FIN DEL ESQUEMA ---
 
+    {last_sql_context}
+
+    --- REGLAS DE MODIFICACIÓN (¡MUY IMPORTANTE!) ---
+    1. Si la "Pregunta del usuario" parece ser una continuación o modificación de la "CONSULTA ANTERIOR" (ej: "agregale el mes", "ahora por cliente", "filtra solo Goodyear"), DEBES modificar esa consulta anterior.
+    2. EJEMPLO: Si la consulta anterior fue `SELECT YEAR(Fecha) as Año, SUM(Ventas_Reales) FROM autollantas WHERE YEAR(Fecha) = 2025 GROUP BY YEAR(Fecha)` y la pregunta nueva es "agregale el mes", la NUEVA consulta debe ser `SELECT YEAR(Fecha) as Año, MONTH(Fecha) as Mes, SUM(Ventas_Reales) FROM autollantas WHERE YEAR(Fecha) = 2025 GROUP BY YEAR(Fecha), MONTH(Fecha)`.
+    3. Si la pregunta es nueva (ej: "¿cuál es el costo total?"), IGNORA la consulta anterior y crea una nueva desde cero.
+
     --- REGLAS DE NEGOCIO Y FORMATO ---
+    (Tus reglas existentes están intactas)
     <<< MANEJO DE "TOP N" >>>
     1. Top N TOTAL: Si pide "top 5", "los 10 mejores", SIN agrupar -> Usa `ORDER BY ... DESC LIMIT N`.
     2. Top N POR GRUPO: Si pide "top 5 de CADA mes", "por CADA línea" -> Usa `ROW_NUMBER()` con CTE.
@@ -382,6 +421,8 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     --- SALIDA ---
     Devuelve SOLO la consulta SQL (sin explicaciones, sin markdown ```sql```).
     """ # Fin del prompt
+    
+    # --- ⬆️ FIN DE LA MODIFICACIÓN DEL PROMPT (PASO 4) ⬆️ ---
 
     try:
         # --- Usar SQLDatabaseChain para GENERAR SQL ---
@@ -539,6 +580,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     except Exception as e:
         st.warning(f"❌ Error en la consulta directa. Intentando método alternativo... Detalle: {e}")
         return {"sql": None, "df": None, "error": str(e)}
+
 
 def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
     st.info("🤔 Activando el agente SQL experto como plan B (con instrucciones mejoradas)...")
@@ -728,21 +770,23 @@ Clasificación:
     except Exception:
         return "consulta"
 
-def obtener_datos_sql(pregunta_usuario: str, hist_text: str) -> dict:
-    if any(keyword in pregunta_usuario.lower() for keyword in ["anterior", "esos datos", "esa tabla"]):
-        for msg in reversed(st.session_state.get('messages', [])):
-            if msg.get('role') == 'assistant':
-                content = msg.get('content', {}); df_prev = content.get('df')
-                if isinstance(df_prev, pd.DataFrame) and not df_prev.empty:
-                    st.info("💡 Usando datos de la respuesta anterior para la nueva solicitud.")
-                    return {"df": df_prev}
-    res_real = ejecutar_sql_real(pregunta_usuario, hist_text)
+def obtener_datos_sql(pregunta_usuario: str, hist_text: str, last_sql: Optional[str] = None) -> dict:
+    """
+    Esta función SIEMPRE ejecuta una nueva consulta SQL.
+    La lógica para re-usar tablas anteriores ahora vive en el orquestador.
+    """
+    
+    # --- ⬇️ INICIO DE LA MODIFICACIÓN ⬇️ ---
+    # 3. Pasa 'last_sql' a la función de ejecución real
+    res_real = ejecutar_sql_real(pregunta_usuario, hist_text, last_sql)
+    # --- ⬆️ FIN DE LA MODIFICACIÓN ⬆️ ---
+    
     if res_real.get("df") is not None and not res_real["df"].empty:
         return res_real
+        
+    # Fallback al agente de lenguaje natural si la ejecución directa falla
+    st.warning("La consulta directa falló, intentando con el agente de lenguaje natural...")
     return ejecutar_sql_en_lenguaje_natural(pregunta_usuario, hist_text)
-
-
-# REEMPLAZA TU FUNCIÓN guardian_agent CON ESTA:
 
 def guardian_agent(pregunta_usuario: str, sql_propuesta: str | None = None) -> bool:
     """
@@ -799,6 +843,12 @@ Responde solo con una palabra:
 def orquestador(pregunta_usuario: str, chat_history: list):
     with st.expander("⚙️ Ver Proceso de IANA", expanded=False):
         hist_text = get_history_text(chat_history)
+        
+        # --- ⬇️ INICIO DE LA MODIFICACIÓN (Paso 2.1) ⬇️ ---
+        # 1. Obtener el último SQL exitoso del historial
+        last_sql = get_last_sql_from_history(chat_history)
+        # --- ⬆️ FIN DE LA MODIFICACIÓN ⬆️ ---
+
         clasificacion = clasificar_intencion(pregunta_usuario)
         st.success(f"✅ ¡Intención detectada! Tarea: {clasificacion.upper()}.")
 
@@ -828,15 +878,56 @@ def orquestador(pregunta_usuario: str, chat_history: list):
             
         if not guardian_agent(pregunta_usuario):
             return {"tipo": "error", "texto": "🚫 Solicitud bloqueada por el agente guardián por motivos de seguridad."}
-    
-        res_datos = obtener_datos_sql(pregunta_usuario, hist_text)
+        
+
+        # --- ⬇️ INICIO DE LA MODIFICACIÓN (Paso 2.2) ⬇️ ---
+        # Reemplazamos la simple llamada a 'obtener_datos_sql' por esta lógica de contexto
+
+        res_datos = {}
+        df_previo = None
+        use_previous_df = False
+
+        # 1. Buscar si ya existe una tabla en la conversación
+        for msg in reversed(st.session_state.get('messages', [])):
+            if msg.get('role') == 'assistant':
+                content = msg.get('content', {}); df_prev = content.get('df')
+                if isinstance(df_prev, pd.DataFrame) and not df_prev.empty:
+                    df_previo = df_prev
+                    break
+        
+        # 2. Decidir si usamos la tabla anterior
+        if df_previo is not None:
+            prompt_lower = pregunta_usuario.lower()
+            prompt_clean = prompt_lower.strip().rstrip("?.!")
+            
+            # Keywords que SIEMPRE se refieren a la tabla anterior
+            contextual_keywords = ["anterior", "esos datos", "esa tabla", "la tabla"]
+            # Triggers de análisis simple
+            simple_analysis_triggers = ["analiza", "analisis", "análisis", "haz un analisis", "dame un analisis"]
+
+            if any(keyword in prompt_lower for keyword in contextual_keywords):
+                use_previous_df = True
+            elif clasificacion == "analista" and prompt_clean in simple_analysis_triggers:
+                use_previous_df = True
+        
+        # 3. Obtener los datos basándose en la decisión
+        if use_previous_df:
+            st.info("💡 Usando la tabla anterior para la nueva solicitud.")
+            # Pasamos tanto el 'df' previo como el 'last_sql'
+            res_datos = {"df": df_previo, "sql": last_sql}
+        else:
+            # Esta es la llamada que teníamos antes, pero ahora le pasamos 'last_sql'
+            res_datos = obtener_datos_sql(pregunta_usuario, hist_text, last_sql)
+        
+        # --- ⬆️ FIN DE LA MODIFICACIÓN ⬆️ ---
+
+
         if res_datos.get("df") is None or res_datos["df"].empty:
             return {"tipo": "error", "texto": "Lo siento, no pude obtener datos para tu pregunta. Intenta reformularla."}
 
-        #if clasificacion == "consulta":
-        #    st.success("✅ Consulta directa completada.")
-        #    return interpretar_resultado_sql(res_datos)
-
+        # if clasificacion == "consulta":
+        #     st.success("✅ Consulta directa completada.")
+        #     return interpretar_resultado_sql(res_datos)
 
         if clasificacion == "consulta":
             st.success("✅ Consulta directa completada.")
@@ -931,6 +1022,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
