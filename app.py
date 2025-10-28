@@ -893,7 +893,7 @@ def procesar_pregunta(prompt):
             st.session_state.messages.append({"role": "assistant", "content": res})
             if res and res.get("tipo") != "error":
                 if res.get("texto"): st.markdown(res["texto"])
-                
+
                 if res.get("styled") is not None: st.dataframe(res["styled"])
                 elif isinstance(res.get("df"), pd.DataFrame) and not res["df"].empty:
                     styled_df = style_dataframe(res["df"])
@@ -926,6 +926,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
