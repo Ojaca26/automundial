@@ -891,20 +891,25 @@ def procesar_pregunta(prompt):
         with st.chat_message("assistant"):
             res = orquestador(prompt, st.session_state.messages)
             st.session_state.messages.append({"role": "assistant", "content": res})
-            if res and res.get("tipo") != "error":
-                if res.get("texto"): st.markdown(res["texto"])
 
-                if res.get("styled") is not None: st.dataframe(res["styled"])
-                elif isinstance(res.get("df"), pd.DataFrame) and not res["df"].empty:
-                    styled_df = style_dataframe(res["df"])
-                    st.dataframe(styled_df)
-                
-                if res.get("analisis"):
-                    st.markdown("---"); st.markdown("### 🧠 Análisis de IANA"); st.markdown(res["analisis"])
-                    st.toast("Análisis generado ✅", icon="✅")
-            elif res:
-                st.error(res.get("texto", "Ocurrió un error inesperado."))
-                st.toast("Hubo un error ❌", icon="❌")
+        if res and res.get("tipo") != "error":
+            if res.get("texto"): st.markdown(res["texto"])
+            
+            # --- ⬇️ INICIO DE LA CORRECCIÓN ⬇️ ---
+            # Revisa si existe la versión "styled" (con formato)
+            if res.get("styled") is not None:
+                st.dataframe(res["styled"])
+            # Si no, muestra la versión "cruda" (df)
+            elif isinstance(res.get("df"), pd.DataFrame) and not res["df"].empty:
+                st.dataframe(res["df"])
+            # --- ⬆️ FIN DE LA CORRECCIÓN ⬆️ ---
+            
+            if res.get("analisis"):
+                st.markdown("---"); st.markdown("### 🧠 Análisis de IANA"); st.markdown(res["analisis"])
+                st.toast("Análisis generado ✅", icon="✅")
+        elif res:
+            st.error(res.get("texto", "Ocurrió un error inesperado."))
+            st.toast("Hubo un error ❌", icon="❌")
 
 # Contenedor para los inputs
 input_container = st.container()
@@ -926,6 +931,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
