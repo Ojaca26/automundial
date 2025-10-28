@@ -333,14 +333,13 @@ def _asegurar_select_only(sql: str) -> str:
     return sql_clean
 
 
-
 def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     st.info("🤖 El agente de datos está traduciendo tu pregunta a SQL...")
 
     # --- Obtener Esquema ---
     try:
-        # Obtener la info solo de la tabla 'autollantas'
-        schema_info = db.get_table_info(table_names=["autollantas"])
+        # [cite_start]Obtener la info solo de la tabla 'autollantas' [cite: 1]
+        [cite_start]schema_info = db.get_table_info(table_names=["autollantas"]) [cite: 1]
     except Exception as e:
         st.error(f"Error crítico: No se pudo obtener el esquema de la tabla 'autollantas'. {e}")
         schema_info = "Error al obtener esquema. Asume columnas estándar."
@@ -350,7 +349,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario, basándote ESTRICTAMENTE en el siguiente esquema de tabla.
 
     --- ESQUEMA DE LA TABLA 'autollantas' ---
-    {schema_info}
+    [cite_start]{schema_info} [cite: 3]
     --- FIN DEL ESQUEMA ---
 
     --- REGLAS DE NEGOCIO Y FORMATO ---
@@ -359,22 +358,22 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
     2. Top N POR GRUPO: Si pide "top 5 de CADA mes", "por CADA línea" -> Usa `ROW_NUMBER()` con CTE.
 
     <<< VALORES MONETARIOS >>>
-    1. "margen"/"margen bruto": Usa `Porcentaje_Margen_Bruto` (relativo). Si pide "margen en pesos"/"absoluto" -> Usa `Margen_Bruto`.
-    2. ❗ NUNCA USES AVG(Porcentaje_Margen_Bruto). Calcula dinámicamente: `(1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100` o `(SUM(Ventas_Reales - Costo_Reales) / SUM(Ventas_Reales)) * 100`.
-    3. "% margen"/"margen porcentual": Usa el cálculo dinámico anterior o `Porcentaje_Margen_Bruto` si aplica directamente.
-    4. "unidades vendidas": Usa `Unidades_Vendidas`.
-    5. "precio promedio": Usa `Precio_Promedio`.
-    6. "ventas reales"/"ventas totales": Usa `Ventas_Reales`.
-    7. "costos reales": Usa `Costo_Reales`.
+    1. "margen"/"margen bruto": Usa `Porcentaje_Margen_Bruto` (relativo). [cite_start]Si pide "margen en pesos"/"absoluto" -> Usa `Margen_Bruto`. [cite: 4]
+    2. ❗ NUNCA USES AVG(Porcentaje_Margen_Bruto). [cite_start]Calcula dinámicamente: `(1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100` o `(SUM(Ventas_Reales - Costo_Reales) / SUM(Ventas_Reales)) * 100`. [cite: 4]
+    3. [cite_start]"% margen"/"margen porcentual": Usa el cálculo dinámico anterior o `Porcentaje_Margen_Bruto` si aplica directamente. [cite: 4]
+    4. [cite_start]"unidades vendidas": Usa `Unidades_Vendidas`. [cite: 5]
+    5. [cite_start]"precio promedio": Usa `Precio_Promedio`. [cite: 5]
+    6. [cite_start]"ventas reales"/"ventas totales": Usa `Ventas_Reales`. [cite: 5]
+    7. [cite_start]"costos reales": Usa `Costo_Reales`. [cite: 5]
 
     <<< FILTRAR POR FECHA >>>
-    1. Usa la columna `Fecha`.
-    2. Si pide año (ej: "2025") -> Añade `WHERE YEAR(Fecha) = [año]`.
+    1. [cite_start]Usa la columna `Fecha`. [cite: 5]
+    2. [cite_start]Si pide año (ej: "2025") -> Añade `WHERE YEAR(Fecha) = [año]`. [cite: 5]
 
     <<< BÚSQUEDA DE PRODUCTOS/CLIENTES/MARCAS >>>
-    1. "artículo"/"producto": Usa `WHERE LOWER(Nombre_Articulo) LIKE '%palabra%'`.
-    2. "cliente": Usa `WHERE LOWER(Nombre_Cliente) LIKE '%palabra%'`.
-    3. "línea"/"marca" (Goodyear, etc.): Usa `WHERE LOWER(Nombre_Linea) LIKE '%marca%'`.
+    1. [cite_start]"artículo"/"producto": Usa `WHERE LOWER(Nombre_Articulo) LIKE '%palabra%'`. [cite: 6]
+    2. [cite_start]"cliente": Usa `WHERE LOWER(Nombre_Cliente) LIKE '%palabra%'`. [cite: 6]
+    3. [cite_start]"línea"/"marca" (Goodyear, etc.): Usa `WHERE LOWER(Nombre_Linea) LIKE '%marca%'`. [cite: 6]
 
     --- CONTEXTO Y PREGUNTA ---
     {hist_text}
@@ -394,98 +393,152 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str):
         # Vamos a replicar el método de VENTUS (LLM.invoke) que es más seguro.
         
         # ⬇️ --- REPLICANDO EL MÉTODO DE VENTUS --- ⬇️
-        sql_query_bruta = llm_sql.invoke(prompt_con_instrucciones).content
+        [cite_start]sql_query_bruta = llm_sql.invoke(prompt_con_instrucciones).content [cite: 7]
         # ⬆️ --- FIN DEL MÉTODO DE VENTUS --- ⬆️
 
         if not sql_query_bruta:
-             st.error("La cadena SQL no devolvió una consulta SQL válida.")
-             return {"sql": None, "df": None, "error": "No se generó SQL."}
+            st.error("La cadena SQL no devolvió una consulta SQL válida.")
+            return {"sql": None, "df": None, "error": "No se generó SQL."}
 
-        st.text_area("🧩 SQL generado por el modelo:", sql_query_bruta, height=100)
+        [cite_start]st.text_area("🧩 SQL generado por el modelo:", sql_query_bruta, height=100) [cite: 7]
 
         # --- Limpieza del SQL ---
-        sql_query_limpia = limpiar_sql(sql_query_bruta) # Usa tu función limpiar_sql
+        [cite_start]sql_query_limpia = limpiar_sql(sql_query_bruta) [cite: 8] # Usa tu función limpiar_sql
 
-        if not sql_query_limpia.lower().startswith("select"):
-            m = re.search(r'(?is)(select\b.+)$', sql_query_limpia)
+        [cite_start]if not sql_query_limpia.lower().startswith("select"): [cite: 9]
+            [cite_start]m = re.search(r'(?is)(select\b.+)$', sql_query_limpia) [cite: 9]
             if m:
-                sql_query_limpia = m.group(1).strip()
+                [cite_start]sql_query_limpia = m.group(1).strip() [cite: 9]
 
-        sql_query_limpia = _asegurar_select_only(sql_query_limpia)
+        [cite_start]sql_query_limpia = _asegurar_select_only(sql_query_limpia) [cite: 10]
 
         if not sql_query_limpia:
-             st.error("El SQL generado quedó vacío después de la limpieza.")
-             return {"sql": None, "df": None, "error": "SQL vacío tras limpieza."}
+            st.error("El SQL generado quedó vacío después de la limpieza.")
+            return {"sql": None, "df": None, "error": "SQL vacío tras limpieza."}
 
 
-        st.code(sql_query_limpia, language="sql")
+        [cite_start]st.code(sql_query_limpia, language="sql") [cite: 10]
 
         # --- Ejecución del SQL ---
-        with st.spinner("⏳ Ejecutando consulta..."):
-            with db._engine.connect() as conn:
-                df = pd.read_sql(text(sql_query_limpia), conn)
+        [cite_start]with st.spinner("⏳ Ejecutando consulta..."): [cite: 11]
+            [cite_start]with db._engine.connect() as conn: [cite: 11]
+                [cite_start]df = pd.read_sql(text(sql_query_limpia), conn) [cite: 11]
 
-        st.success(f"✅ ¡Consulta ejecutada! Filas: {len(df)}")
+        [cite_start]st.success(f"✅ ¡Consulta ejecutada! Filas: {len(df)}") [cite: 11]
 
         # --- Post-procesamiento (Completo y Corregido) ---
         value_cols = [] # Definir fuera del try para tenerla disponible
         try:
             if not df.empty:
                 # Añadir columna Año si es relevante
-                year_match = re.search(r"YEAR\([^)]*\)\s*=\s*(\d{4})", sql_query_limpia)
-                year_value = year_match.group(1) if year_match else None
+                [cite_start]year_match = re.search(r"YEAR\([^)]*\)\s*=\s*(\d{4})", sql_query_limpia) [cite: 12]
+                [cite_start]year_value = year_match.group(1) if year_match else None [cite: 13]
                 if year_value and "Año" not in df.columns:
-                    df.insert(0, "Año", year_value)
+                    [cite_start]df.insert(0, "Año", year_value) [cite: 14]
 
                 # Identificar columnas de valor numérico (excluyendo fecha/tiempo)
                 value_cols = [
                     c for c in df.select_dtypes("number").columns
-                    if not re.search(r"(?i)\b(mes|año|dia|fecha|id|codigo)\b", c)
+                    [cite_start]if not re.search(r"(?i)\b(mes|año|dia|fecha|id|codigo)\b", c) [cite: 15]
                 ]
 
                 # Añadir fila de Total (si hay más de una fila y columnas de valor)
-                if value_cols and len(df) > 1:
-                    total_row = {}
-                    for col in df.columns:
-                        if col in value_cols:
-                            if pd.api.types.is_numeric_dtype(df[col]):
-                                total_row[col] = df[col].sum()
+                [cite_start]if value_cols and len(df) > 1: [cite: 16]
+                    [cite_start]total_row = {} [cite: 16]
+                    [cite_start]for col in df.columns: [cite: 16]
+                        [cite_start]if col in value_cols: [cite: 16]
+                            [cite_start]if pd.api.types.is_numeric_dtype(df[col]): [cite: 16]
+                                [cite_start]total_row[col] = df[col].sum() [cite: 16]
                             else:
-                                total_row[col] = np.nan
-                        elif pd.api.types.is_numeric_dtype(df[col]):
-                            total_row[col] = np.nan
+                                [cite_start]total_row[col] = np.nan [cite: 16]
+                        [cite_start]elif pd.api.types.is_numeric_dtype(df[col]): [cite: 16]
+                            [cite_start]total_row[col] = np.nan [cite: 16]
                         else:
-                            total_row[col] = ""
+                            [cite_start]total_row[col] = "" [cite: 16]
 
                     first_col_name = df.columns[0]
                     total_row[first_col_name] = "Total"
                     
-                    df = pd.concat([df, pd.DataFrame([total_row])], ignore_index=True)
+                    [cite_start]df = pd.concat([df, pd.DataFrame([total_row])], ignore_index=True) [cite: 18]
 
-            # --- Aplicar Estilos ---
-            def highlight_total(row):
-                if isinstance(row.iloc[0], str) and row.iloc[0].lower() == "total":
-                    return ["font-weight: bold; background-color: #f8f9fa; border-top: 2px solid #999;"] * len(row)
-                else:
-                    return [""] * len(row)
+                
+                # --- ⬇️ INICIO DE LA SOLUCIÓN (LÍMITE DE CELDAS) ⬇️ ---
+                
+                # Límite de celdas (el default de Streamlit es 262144)
+                MAX_CELLS_FOR_STYLING = 262144 
 
-            styled_df = df.style.apply(highlight_total, axis=1)
+                # df.size es el total de celdas (filas * columnas)
+                if df.size > MAX_CELLS_FOR_STYLING:
+                    st.warning(f"⚠️ La tabla resultante es muy grande ({df.size:,.0f} celdas) para aplicar formatos. Se mostrarán los datos en modo simple.")
+                    # Devolvemos solo el df crudo, SIN la clave "styled"
+                    # La función 'procesar_pregunta' usará este 'df' crudo
+                    return {"sql": sql_query_limpia, "df": df}
+                
+                st.info("🎨 Aplicando formato a la tabla...")
+                # --- ⬆️ FIN DE LA SOLUCIÓN (LÍMITE DE CELDAS) ⬆️ ---
 
-            if value_cols:
-                format_map = {col: "{:,.0f}" for col in value_cols}
-                styled_df = styled_df.format(format_map, na_rep="")
 
-            return {"sql": sql_query_limpia, "df": df, "styled": styled_df}
+                # --- Aplicar Estilos ---
+                [cite_start]def highlight_total(row): [cite: 19]
+                    [cite_start]if isinstance(row.iloc[0], str) and row.iloc[0].lower() == "total": [cite: 19]
+                        [cite_start]return ["font-weight: bold; background-color: #f8f9fa; border-top: 2px solid #999;"] * len(row) [cite: 19]
+                    else:
+                        [cite_start]return [""] * len(row) [cite: 19]
+
+                [cite_start]styled_df = df.style.apply(highlight_total, axis=1) [cite: 20]
+
+
+                # --- ⬇️ INICIO DE FORMATO SEGURO (Previene crash con 'Total') ⬇️ ---
+        
+                # 1. Define un formateador "seguro" que ignora strings (como "Total")
+                def safe_num_format(val, fmt_str):
+                    if pd.api.types.is_number(val):
+                        try:
+                            return fmt_str.format(val)
+                        except (ValueError, TypeError):
+                            return val # Fallback si el formato falla
+                    return val # Retorna valores no numéricos (como "Total") tal cual
+
+                # 2. Crea un mapa de las "cadenas de formato" que queremos
+                format_map_strings = {}
+                
+                # Formato para columnas de valor (ej. Ventas_Reales)
+                for col in value_cols:
+                    format_map_strings[col] = "{:,.0f}"
+
+                # Formato para columnas específicas (ej. Año, Mes)
+                if "Mes" in df.columns:
+                    format_map_strings["Mes"] = "{:.0f}"
+                if "Año" in df.columns:
+                    # Esta columna puede tener "Total" asi que el safe_format es vital
+                    format_map_strings["Año"] = "{:.0f}" 
+                
+                # Formato para porcentajes (basado en el prompt de 'autollantas')
+                percent_cols = [col for col in df.columns if "porcentaje" in col.lower() or "%" in col.lower() or col == "Porcentaje_Margen_Bruto"]
+                for col in percent_cols:
+                    format_map_strings[col] = "{:,.2f}%"
+
+                # 3. Crea el diccionario final de formateadores "callable" (funciones)
+                final_formatter = {}
+                for col, fmt_str in format_map_strings.items():
+                    # Creamos una función lambda "segura" para cada columna
+                    final_formatter[col] = lambda val, f=fmt_str: safe_num_format(val, f)
+
+                # 4. Aplica el diccionario de formateadores seguros
+                styled_df = styled_df.format(final_formatter, na_rep="")
+                
+                # --- ⬆️ FIN DE FORMATO SEGURO ⬆️ ---
+
+                return {"sql": sql_query_limpia, "df": df, "styled": styled_df}
 
         except Exception as e:
             st.warning(f"⚠️ No se pudo aplicar formato ni totales: {e}")
-            return {"sql": sql_query_limpia, "df": df}
+            [cite_start]return {"sql": sql_query_limpia, "df": df} [cite: 24]
 
     # --- Manejo de error general ---
     except Exception as e:
-        st.warning(f"❌ Error en la consulta directa. Intentando método alternativo... Detalle: {e}")
-        return {"sql": None, "df": None, "error": str(e)}
-
+        [cite_start]st.warning(f"❌ Error en la consulta directa. Intentando método alternativo... Detalle: {e}") [cite: 25]
+        [cite_start]return {"sql": None, "df": None, "error": str(e)} [cite: 25]
 
 def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
     st.info("🤔 Activando el agente SQL experto como plan B (con instrucciones mejoradas)...")
@@ -873,6 +926,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
