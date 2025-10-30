@@ -55,9 +55,14 @@ def get_database_connection():
             uri = f"mysql+pymysql://{creds['user']}:{creds['password']}@{creds['host']}/{creds['database']}"
             
             # 2. ENGINE_ARGS: Pasamos la configuración de SSL aquí.
-            # Esto le dice al motor de SQLAlchemy que deshabilite SSL para la conexión.
             engine_args = {
-                "connect_args": {"ssl_disabled": True}
+                "connect_args": {"ssl_disabled": True},
+                # --- ⬇️ INICIO DE LA CORRECCIÓN ⬇️ ---
+                # "pool_recycle" le dice al motor que descarte conexiones
+                # más antiguas que X segundos (1800s = 30 minutos).
+                # Esto previene el error "MySQL server has gone away".
+                "pool_recycle": 1800 
+                # --- ⬆️ FIN DE LA CORRECCIÓN ⬆️ ---
             }
 
             db = SQLDatabase.from_uri(uri, include_tables=["autollantas"], engine_args=engine_args)
@@ -98,14 +103,28 @@ def get_llms():
 db = get_database_connection()
 llm_sql, llm_analista, llm_orq, llm_validador = get_llms()
 
+
 @st.cache_resource
 def get_sql_agent(_llm, _db):
     if not _llm or not _db: return None
     with st.spinner("🛠️ Configurando agente SQL de IANA..."):
         toolkit = SQLDatabaseToolkit(db=_db, llm=_llm)
-        agent = create_sql_agent(llm=_llm, toolkit=toolkit, verbose=False, top_k=1000)
+        
+        # --- ⬇️ INICIO DE LA CORRECCIÓN ⬇️ ---
+        agent = create_sql_agent(
+            llm=_llm, 
+            toolkit=toolkit, 
+            verbose=False, 
+            top_k=1000,
+            # Esto le dice al agente que reintente si falla
+            # al "parsear" la respuesta del LLM.
+            handle_parsing_errors=True 
+        )
+        # --- ⬆️ FIN DE LA CORRECCIÓN ⬆️ ---
+        
         st.success("✅ Agente SQL configurado.")
         return agent
+
 
 agente_sql = get_sql_agent(llm_sql, db)
 
@@ -1022,6 +1041,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
