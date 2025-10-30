@@ -406,7 +406,7 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, last_sql: Optional[
 
     --- REGLAS DE MODIFICACIÓN (¡MUY IMPORTANTE!) ---
     1. Si la "Pregunta del usuario" parece ser una continuación o modificación de la "CONSULTA ANTERIOR" (ej: "agregale el mes", "ahora por cliente", "filtra solo Goodyear"), DEBES modificar esa consulta anterior.
-    2. EJEMPLO: Si la consulta anterior fue `SELECT YEAR(Fecha) as Año, SUM(Ventas_Reales) FROM autollantas WHERE YEAR(Fecha) = 2025 GROUP BY YEAR(Fecha)` y la pregunta nueva es "agregale el mes", la NUEVA consulta debe ser `SELECT YEAR(Fecha) as Año, MONTH(Fecha) as Mes, SUM(Ventas_Reales) FROM autollantas WHERE YEAR(Fecha) = 2025 GROUP BY YEAR(Fecha), MONTH(Fecha)`.
+    2. EJEMPLO: Si la consulta anterior fue `SELECT YEAR(_Fecha) as Año, SUM(Ventas_Reales) FROM autollantas WHERE YEAR(_Fecha) = 2025 GROUP BY YEAR(_Fecha)` y la pregunta nueva es "agregale el mes", la NUEVA consulta debe ser `SELECT YEAR(_Fecha) as Año, MONTH(_Fecha) as Mes, SUM(Ventas_Reales) FROM autollantas WHERE YEAR(_Fecha) = 2025 GROUP BY YEAR(_Fecha), MONTH(_Fecha)`.
     3. Si la pregunta es nueva (ej: "¿cuál es el costo total?"), IGNORA la consulta anterior y crea una nueva desde cero.
 
     --- REGLAS DE NEGOCIO Y FORMATO ---
@@ -425,8 +425,10 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, last_sql: Optional[
     7. "costos reales": Usa `Costo_Reales`.
 
     <<< FILTRAR POR FECHA >>>
-    1. Usa la columna `Fecha`.
-    2. Si pide año (ej: "2025") -> Añade `WHERE YEAR(Fecha) = [año]`.
+    # --- ⬇️ INICIO DE LA CORRECCIÓN ⬇️ ---
+    1. Usa la columna `_Fecha`.
+    2. Si pide año (ej: "2025") -> Añade `WHERE YEAR(_Fecha) = [año]`.
+    # --- ⬆️ FIN DE LA CORRECCIÓN ⬆️ ---
 
     <<< BÚSQUEDA DE PRODUCTOS/CLIENTES/MARCAS >>>
     1. "artículo"/"producto": Usa `WHERE LOWER(Nombre_Articulo) LIKE '%palabra%'`.
@@ -604,36 +606,28 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, last_sql: Optional[
 def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
     st.info("🤔 Activando el agente SQL experto como plan B (con instrucciones mejoradas)...")
 
-    # Usamos el MISMO prompt detallado del agente principal para máxima consistencia
-    prompt_con_instrucciones = f"""
-    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario.
-    Al final, devuelve ÚNICAMENTE una tabla en formato Markdown (con encabezados). NUNCA resumas ni expliques.
-
-    ---
-    <<< NUEVA REGLA CRÍTICA: CÓMO MANEJAR CONSULTAS "TOP N" >>>
-    Existen DOS tipos de consultas "Top N". Debes identificar cuál es:
-    1.  Top N del Resultado TOTAL (Consulta Simple):
-        - CUÁNDO USAR: Si el usuario pide un "top 5", "los 10 mejores", etc., SIN especificar "por cada mes", "por línea" o cualquier otra agrupación.
-        - CÓMO HACERLO: Usa un `ORDER BY ... DESC` y `LIMIT N` al final.
-    2.  Top N DENTRO DE CADA GRUPO (Consulta Compleja):
-        - CUÁNDO USAR: Si el usuario pide un "top 5" explícitamente "de CADA mes", "por CADA línea", etc.
-        - CÓMO HACERLO: Aquí SÍ DEBES usar la función de ventana `ROW_NUMBER()` con un CTE.
-    ---
-    <<< REGLA DE ORO PARA BÚSQUEDA DE PRODUCTOS >>>
-    4. REGLA DE MARCAS: Cuando el usuario mencione “línea”, “familia de producto” o un nombre de marca específico, se está refiriendo al campo 'Nombre_Linea'.
-       - IMPORTANTE: Este campo contiene las marcas principales. Si el usuario pregunta por la facturación o ventas de una marca, debes filtrar usando este campo.
-       - Lista de Marcas Comunes: Goodyear, Firestone, Chevrolet, Bridgestone, Castrol, Hankook, Firemax, Pirelli, Shell, Terpel.
-    ---
+    # --- ⬇️ INICIO DE LA CORRECCIÓN ⬇️ ---
+    # El 'agente_sql' es un AgentExecutor, funciona mejor con una
+    # pregunta simple, no con un prompt de reglas complejo.
     
+    # Eliminamos el 'prompt_con_instrucciones' gigante que estaba aquí.
+    
+    simple_prompt = f"""
     {hist_text}
+    
+    Usando las herramientas de base de datos disponibles, responde la siguiente pregunta del usuario.
+    
     Pregunta: "{pregunta_usuario}"
     """
+    # --- ⬆️ FIN DE LA CORRECCIÓN ⬆️ ---
 
     try:
         with st.spinner("💬 Pidiendo al agente SQL experto que responda..."):
-            # --- ¡CORRECCIÓN IMPORTANTE AQUÍ! ---
-            # Nos aseguramos de usar la variable correcta "prompt_con_instrucciones"
-            res = agente_sql.invoke(prompt_con_instrucciones)
+            
+            # --- ⬇️ INICIO DE LA CORRECCIÓN ⬇️ ---
+            # Usamos el nuevo prompt simple
+            res = agente_sql.invoke(simple_prompt)
+            # --- ⬆️ FIN DE LA CORRECCIÓN ⬆️ ---
             
             texto_salida = res["output"] if isinstance(res, dict) and "output" in res else str(res)
         
@@ -651,6 +645,7 @@ def ejecutar_sql_en_lenguaje_natural(pregunta_usuario: str, hist_text: str):
     except Exception as e:
         st.error(f"❌ El agente SQL experto también encontró un problema: {e}")
         return {"texto": f"[SQL_ERROR] {e}", "df": pd.DataFrame()}
+
         
 def analizar_con_datos(pregunta_usuario: str, hist_text: str, df: pd.DataFrame | None, feedback: str = None):
     st.info("\n🧠 El analista experto está examinando los datos...")
@@ -1041,6 +1036,7 @@ elif prompt_text:
 if prompt_a_procesar:
     procesar_pregunta(prompt_a_procesar)
     
+
 
 
 
