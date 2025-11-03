@@ -9,3 +9,4 @@ langchain-openai
 streamlit-mic-recorder==0.0.8
 SpeechRecognition>=3.10.0
 numpy
+streamlit-mic-recorder
