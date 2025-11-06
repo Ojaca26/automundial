@@ -967,7 +967,7 @@ def orquestador(pregunta_usuario: str, chat_history: list):
 # ============================================
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": {"texto": "¡Hola! Soy IANA, tu asistente de IA de autollantas. ¿Qué te gustaría saber?"}}]
+    st.session_state.messages = [{"role": "assistant", "content": {"texto": "¡Hola! Soy IANA, tu asistente de IA. ¿Qué te gustaría saber?"}}]
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
