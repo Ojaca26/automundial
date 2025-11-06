@@ -30,14 +30,14 @@ import json
 # ============================================
 # 0) Configuración de la Página y Título
 # ============================================
-st.set_page_config(page_title="IANA para AutoLLantas", page_icon="logo_autollantas.png", layout="wide")
+st.set_page_config(page_title="IANA", page_icon="logo.png", layout="wide")
 
 col1, col2 = st.columns([1, 4])
 with col1:
-    st.image("logo_autollantas.png", width=120)
+    st.image("logo.png", width=120)
 with col2:
     st.title("IANA: Tu Asistente IA para Análisis de Datos")
-    st.markdown("Soy la red de agentes IA de **AutoLLantas**. Hazme una pregunta sobre los datos de tu negocio.")
+    st.markdown("Soy la red de agentes IA. Hazme una pregunta sobre los datos de tu negocio.")
 
 # ============================================
 # 1) Conexión a la Base de Datos y LLMs
