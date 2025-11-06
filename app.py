@@ -412,8 +412,11 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, last_sql: Optional[
     --- REGLAS DE NEGOCIO Y FORMATO ---
     (Tus reglas existentes están intactas)
     <<< MANEJO DE "TOP N" >>>
-    1. Top N TOTAL: Si pide "top 5", "los 10 mejores", SIN agrupar -> Usa `ORDER BY ... DESC LIMIT N`.
-    2. Top N POR GRUPO: Si pide "top 5 de CADA mes", "por CADA línea" -> Usa `ROW_NUMBER()` con CTE.
+    1. Si pide "top 5", "los 10 mejores", SIN agrupar -> Usa `ORDER BY ... DESC LIMIT N`.
+    2. Si pide "top 5 de CADA mes", "por CADA línea" -> Usa `ROW_NUMBER()` con CTE.
+
+     <<< CARTERA Y RECAUDO >>>
+    1. Si el usuario pide algún tema de cartera como “cartera corriente” o “cartera vencida” o "cartera total", reponse con palabras profesionales, que no existe cartera en base de datos.
 
     <<< VALORES MONETARIOS >>>
     1. "margen"/"margen bruto": Usa `Porcentaje_Margen_Bruto` (relativo). Si pide "margen en pesos"/"absoluto" -> Usa `Margen_Bruto`.
@@ -421,8 +424,8 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, last_sql: Optional[
     3. "% margen"/"margen porcentual": Usa el cálculo dinámico anterior o `Porcentaje_Margen_Bruto` si aplica directamente.
     4. "unidades vendidas": Usa `Unidades_Vendidas`.
     5. "precio promedio": Usa `Precio_Promedio`.
-    6. "ventas reales"/"ventas totales": Usa `Ventas_Reales`.
-    7. "costos reales": Usa `Costo_Reales`.
+    6. "ventas"/"ventas totales": Usa `Ventas_Reales`.
+    7. "costos": Usa `Costo_Reales`.
 
     <<< FILTRAR POR FECHA >>>
     # --- ⬇️ INICIO DE LA CORRECCIÓN ⬇️ ---
